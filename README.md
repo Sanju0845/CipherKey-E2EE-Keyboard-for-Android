@@ -31,11 +31,21 @@ Most secret-chat apps only work inside one messenger. CipherKey works **across a
 
 ## Build from source
 
+**Cloud build (no local Gradle):** Every push to `main` runs [GitHub Actions](https://github.com/Sanju0845/CipherKey-E2EE-Keyboard-for-Android/actions). Open the latest workflow run → **Artifacts** → download `cipherkey-debug-apk` or `cipherkey-release-apk`.
+
+**Local build:**
+
 ```bash
 ./gradlew assembleDebug
 ```
 
 Debug APK: `app/build/outputs/apk/debug/app-debug.apk`
+
+Release APK (unsigned in CI unless you add signing secrets):
+
+```bash
+./gradlew assembleRelease
+```
 
 Install on a connected device:
 
