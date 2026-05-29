@@ -114,6 +114,13 @@ fun DevPreviewContent() {
                     composedText = TextFieldValue(composedText.text + k)
                 }
             },
+            onGlideWord = { word ->
+                if (isCipherModeOn) {
+                    composingDraft += word
+                } else {
+                    composedText = TextFieldValue(composedText.text + word)
+                }
+            },
             onBackspace = {
                 if (isCipherModeOn && composingDraft.isNotEmpty()) {
                     composingDraft = composingDraft.dropLast(1)

@@ -33,6 +33,7 @@ import com.example.cipher.CipherDetector
 import com.example.cipher.CipherEngine
 import com.example.ui.theme.ImmersiveBg
 import com.example.ui.theme.MyApplicationTheme
+import kotlinx.coroutines.delay
 
 class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -90,16 +91,22 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
 
     @Composable
     fun KeyboardAppContent() {
-        // Automatically check clipboard status and text boxes whenever compositions shift
-        LaunchedEffect(composingDraft, isCipherModeOn) {
+        LaunchedEffect(isCipherModeOn) {
+            if (!isCipherModeOn) {
+                scanForCiphers()
+            }
             updateActiveTextFieldStatus()
-            // Avoid toolbar swapping to decrypt preview while drafting encrypted text
+        }
+
+        LaunchedEffect(composingDraft, isCipherModeOn) {
             if (isCipherModeOn && composingDraft.isNotEmpty()) {
                 decryptedTextPreview = null
                 detectedEncryptedText = null
-            } else {
-                scanForCiphers()
+                return@LaunchedEffect
             }
+            delay(350)
+            scanForCiphers()
+            updateActiveTextFieldStatus()
         }
 
         Column(
@@ -153,6 +160,7 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                 useSymbols = useSymbols,
                 onPageChange = { activePage = it },
                 onKeyPress = { handleKeyPress(it) },
+                onGlideWord = { handleGlideWord(it) },
                 onBackspace = { handleBackspace() },
                 onSpace = { handleSpace() },
                 onEnter = { handleEnter() },
@@ -171,7 +179,19 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
         } catch (e: Exception) {
             Log.e("CipherKeyboard", "Error handling key press: ${e.message}")
         }
-        updateActiveTextFieldStatus()
+    }
+
+    private fun handleGlideWord(word: String) {
+        if (word.isEmpty()) return
+        try {
+            if (isCipherModeOn) {
+                composingDraft += word
+            } else {
+                currentInputConnection?.commitText(word, 1)
+            }
+        } catch (e: Exception) {
+            Log.e("CipherKeyboard", "Error handling glide word: ${e.message}")
+        }
     }
 
     private fun handleBackspace() {
@@ -184,7 +204,6 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
         } catch (e: Exception) {
             Log.e("CipherKeyboard", "Error handling backspace: ${e.message}")
         }
-        updateActiveTextFieldStatus()
     }
 
     private fun handleSpace() {
@@ -202,7 +221,6 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
         } catch (e: Exception) {
             Log.e("CipherKeyboard", "Error handling space: ${e.message}")
         }
-        updateActiveTextFieldStatus()
     }
 
     private fun handleEnter() {
@@ -220,7 +238,6 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
         } catch (e: Exception) {
             Log.e("CipherKeyboard", "Error handling enter: ${e.message}")
         }
-        updateActiveTextFieldStatus()
     }
 
     private fun updateActiveTextFieldStatus() {
