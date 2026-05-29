@@ -276,7 +276,6 @@ private fun GlideLetterRow(
             .glideRowGestures(
                 tracker = tracker,
                 enabled = glideEnabled,
-                onTapKey = onKeyPress,
                 onGlideWord = onGlideWord,
                 onHighlightKey = { glideHighlightKey = it }
             ),
@@ -288,7 +287,7 @@ private fun GlideLetterRow(
                 modifier = Modifier
                     .weight(1f)
                     .trackGlideKey(key, tracker),
-                onClick = if (glideEnabled) null else { { onKeyPress(key) } },
+                onClick = { onKeyPress(key) },
                 glideHighlight = glideHighlightKey == key
             )
         }

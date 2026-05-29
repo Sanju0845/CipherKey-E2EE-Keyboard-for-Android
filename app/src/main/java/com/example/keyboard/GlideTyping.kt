@@ -1,14 +1,13 @@
 package com.example.keyboard
 
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 
 /**
@@ -49,14 +48,13 @@ class GlideKeyTracker {
 @Composable
 fun Modifier.trackGlideKey(key: String, tracker: GlideKeyTracker): Modifier =
     onGloballyPositioned { coordinates ->
-        tracker.updateBounds(key, coordinates.boundsInRoot())
+        tracker.updateBounds(key, coordinates.boundsInParent())
     }
 
 @Composable
 fun Modifier.glideRowGestures(
     tracker: GlideKeyTracker,
     enabled: Boolean,
-    onTapKey: (String) -> Unit,
     onGlideWord: (String) -> Unit,
     onHighlightKey: (String?) -> Unit = {}
 ): Modifier {
@@ -75,10 +73,6 @@ fun Modifier.glideRowGestures(
         fun resetGlide() {
             glidePath.clear()
             onHighlightKey(null)
-        }
-
-        detectTapGestures { offset ->
-            tracker.keyAt(offset.x, offset.y)?.let(onTapKey)
         }
 
         detectDragGestures(
