@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "E2EE Extension",
+  "version": "1.0.4",
+  "description": "Encrypts text in any text box before you send — compatible with CipherKey keyboard.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "E2EE Extension"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "scripts/cipher-bundle.js",
+        "scripts/whatsapp-decrypt.js",
+        "scripts/content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ]
+}

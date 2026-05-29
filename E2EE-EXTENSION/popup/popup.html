@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>E2EE Extension</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <h1>E2EE Extension</h1>
+    <p class="sub">Encrypts on Send — matches CipherKey keyboard</p>
+  </header>
+
+  <label class="row toggle">
+    <span>Encrypt before send</span>
+    <input type="checkbox" id="enabled" checked />
+  </label>
+
+  <label class="row toggle">
+    <span>Use symbol mode</span>
+    <input type="checkbox" id="useSymbols" checked />
+  </label>
+  <p class="hint">Off = emoji wrappers (same as keyboard emoji mode)</p>
+
+  <label class="field">
+    <span>Shared passphrase</span>
+    <input type="password" id="passphrase" autocomplete="off" />
+  </label>
+  <p class="hint">Must match your Android keyboard passphrase to decrypt.</p>
+
+  <label class="row toggle">
+    <span>Decrypt incoming (WhatsApp Web)</span>
+    <input type="checkbox" id="decryptIncoming" checked />
+  </label>
+  <p class="hint">Shows 🔓 real text under encrypted messages in chat.</p>
+
+  <section class="info-box">
+    <strong>Setup for your friend (receiver)</strong>
+    <ol>
+      <li>Install this same extension in Chrome.</li>
+      <li>Open the extension → enter the <strong>same passphrase</strong> as you → Save.</li>
+      <li>Turn on <strong>Decrypt incoming</strong>.</li>
+      <li>Open <strong>web.whatsapp.com</strong> — under the symbol message they’ll see 🔓 and your real words.</li>
+    </ol>
+    <p>WhatsApp still stores the encrypted symbols; only their browser shows the decrypted line.</p>
+  </section>
+
+  <button type="button" id="save">Save</button>
+  <p id="status" class="status" aria-live="polite"></p>
+
+  <script src="popup.js"></script>
+</body>
+</html>
