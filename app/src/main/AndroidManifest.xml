@@ -35,6 +35,33 @@
             android:label="Quick translator"
             android:theme="@style/Theme.MyApplication" />
 
+        <!--
+            Text Selection Actions — appear in the Copy/Cut/Paste toolbar when user selects text.
+            Works in ANY app: WhatsApp, Telegram, Notes, Gmail, Browser, etc.
+        -->
+        <activity
+            android:name="com.example.quick.EncryptTextAction"
+            android:exported="true"
+            android:label="🔒 Encrypt"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name="com.example.quick.DecryptTextAction"
+            android:exported="true"
+            android:label="🔓 Decrypt"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <service
             android:name="com.example.quick.QuickBubbleService"
             android:exported="false"

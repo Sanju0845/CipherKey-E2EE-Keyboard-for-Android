@@ -1,6 +1,6 @@
 # CipherKey — Features & Architecture
 
-> Latest: Version 1.2.0
+> Latest: Version 1.2.1
 
 ---
 
@@ -14,8 +14,17 @@ Messages are encrypted *before* they leave your keyboard, meaning no app, server
 
 ## Changelog
 
-### v1.2.0
-- **AES + HMAC-SHA256 Message Integrity**
+### v1.2.1 — Quick Decrypt Bubble (Text Selection Actions)
+- **🔒 Encrypt** and **🔓 Decrypt** buttons now appear directly in Android's text selection toolbar
+- Works in **any app** — WhatsApp, Telegram, Notes, Gmail, Chrome, Instagram, anywhere text can be selected
+- **How to use:**
+  - Long press any text → select it → tap **🔒 Encrypt** → selected text is replaced with cipher symbols
+  - Long press any cipher message → select it → tap **🔓 Decrypt** → replaced with plaintext
+- Shows toast: `🔒 Encrypted`, `🔓 Decrypted`, or `⚠ Integrity warning` depending on result
+- Decrypt also respects HMAC integrity — warns if message was tampered
+- Zero UI — completely invisible Activity, no screen shown, just instant in-place replacement
+
+### v1.2.0 — AES + HMAC-SHA256 Message Integrity
   - Every encrypted message now includes an 8-byte HMAC-SHA256 tag
   - On decrypt, HMAC is verified before returning plaintext
   - Clipboard decrypt preview shows `✓ Verified` (green) if intact or `⚠ Integrity Failed` (red) if tampered
