@@ -42,6 +42,12 @@ data class ClipboardEntry(
     val isCipher: Boolean
 )
 
+// Result from inline decrypt preview — includes integrity status
+data class DecryptPreviewResult(
+    val plaintext: String,
+    val integrityOk: Boolean
+)
+
 @Composable
 fun ClipboardPanel(
     entries: List<ClipboardEntry>,
@@ -49,7 +55,7 @@ fun ClipboardPanel(
     onPasteRaw: (String) -> Unit,
     onEncryptAndPaste: (String) -> Unit,
     onDecryptAndPaste: (String) -> Unit,
-    onDecryptPreview: (String) -> String,
+    onDecryptPreview: (String) -> DecryptPreviewResult,
     onDelete: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -109,10 +115,10 @@ private fun ClipCard(
     entry: ClipboardEntry,
     onPasteRaw: () -> Unit,
     onEncrypt: () -> Unit,
-    onDecryptPreview: () -> String,
+    onDecryptPreview: () -> DecryptPreviewResult,
     onDecryptAndPaste: (String) -> Unit
 ) {
-    var decryptedPreview by remember(entry.id) { mutableStateOf<String?>(null) }
+    var decryptedPreview by remember(entry.id) { mutableStateOf<DecryptPreviewResult?>(null) }
     val context = LocalContext.current
 
     Column(
@@ -176,8 +182,11 @@ private fun ClipCard(
                                 if (decryptedPreview != null) {
                                     decryptedPreview = null // collapse
                                 } else {
-                                    decryptedPreview = onDecryptPreview()
-                                        .ifEmpty { "⚠ Could not decrypt — wrong passphrase?" }
+                                    decryptedPreview = onDecryptPreview().let {
+                                        if (it.plaintext.isEmpty())
+                                            DecryptPreviewResult("⚠ Could not decrypt — wrong passphrase?", false)
+                                        else it
+                                    }
                                 }
                             } else {
                                 onEncrypt()
@@ -217,39 +226,55 @@ private fun ClipCard(
                     .background(Color(0xFF111520))
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
-                Text(
-                    "🔓 Decrypted:",
-                    color = ImmersiveCyan,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                // Integrity badge
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("🔓 Decrypted:", color = ImmersiveCyan, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    if (decryptedPreview?.integrityOk == true) {
+                        Text(
+                            "✓ Verified",
+                            color = Color(0xFF4CAF50),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        Text(
+                            "⚠ Integrity Failed",
+                            color = Color(0xFFFF6B6B),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = decryptedPreview ?: "",
-                    color = Slate100,
+                    text = decryptedPreview?.plaintext ?: "",
+                    color = if (decryptedPreview?.integrityOk == true) Slate100 else Color(0xFFFF6B6B),
                     fontSize = 13.sp,
                     lineHeight = 18.sp
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Copy decrypted to clipboard
                     ActionChip(
                         label = "Copy",
                         onClick = {
                             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            cm.setPrimaryClip(ClipData.newPlainText("decrypted", decryptedPreview ?: ""))
+                            cm.setPrimaryClip(ClipData.newPlainText("decrypted", decryptedPreview?.plaintext ?: ""))
                             decryptedPreview = null
                         }
                     )
-                    // Paste decrypted into the text field
-                    ActionChip(
-                        label = "Paste into field",
-                        accent = true,
-                        onClick = {
-                            decryptedPreview?.let { onDecryptAndPaste(it) }
-                            decryptedPreview = null
-                        }
-                    )
+                    if (decryptedPreview?.integrityOk == true) {
+                        ActionChip(
+                            label = "Paste into field",
+                            accent = true,
+                            onClick = {
+                                decryptedPreview?.plaintext?.let { onDecryptAndPaste(it) }
+                                decryptedPreview = null
+                            }
+                        )
+                    }
                 }
             }
         }

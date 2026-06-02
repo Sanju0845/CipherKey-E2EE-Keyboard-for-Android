@@ -193,7 +193,11 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                             showClipboard = false
                         },
                         onDecryptPreview = { text ->
-                            decryptFullText(text)
+                            val result = CipherEngine.decryptWithIntegrity(applicationContext, text)
+                            DecryptPreviewResult(
+                                plaintext = result.plaintext ?: "",
+                                integrityOk = result.integrityOk
+                            )
                         },
                         onDelete = { id ->
                             ClipboardStore.removeEntry(id)

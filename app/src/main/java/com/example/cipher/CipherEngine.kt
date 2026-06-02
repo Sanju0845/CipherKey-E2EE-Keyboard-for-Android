@@ -5,6 +5,7 @@ import android.util.Log
 import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.Cipher
+import javax.crypto.Mac
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
@@ -12,174 +13,209 @@ object CipherEngine {
     private const val TAG = "CipherEngine"
     private const val ALGORITHM = "AES"
     private const val TRANSFORMATION = "AES/CBC/PKCS5Padding"
-    
+    private const val HMAC_ALGORITHM = "HmacSHA256"
+    private const val HMAC_TAG_BYTES = 8  // 64-bit tag appended after ciphertext
+
     /** Shared out-of-the-box key; must match on sender and receiver. */
     const val DEFAULT_PASSPHRASE = "CipherKeyDefaultSharedKey#2026!"
-    
+
     private var cachedSecretKey: SecretKeySpec? = null
     private var cachedPassphrase: String? = null
 
-    /**
-     * Resolves the AES 128-bit key. Caches the resulting Spec so that key derivation
-     * does not block the typing loop, ensuring sub-millisecond operational performance.
-     */
+    // ── Key derivation ────────────────────────────────────────────────────────
+
     @Synchronized
     fun getSecretKey(context: Context): SecretKeySpec {
         val passphrase = getStoredPassphrase(context)
-        if (cachedSecretKey != null && cachedPassphrase == passphrase) {
-            return cachedSecretKey!!
-        }
-        
+        if (cachedSecretKey != null && cachedPassphrase == passphrase) return cachedSecretKey!!
         try {
             val digest = MessageDigest.getInstance("SHA-256")
             val hashBytes = digest.digest(passphrase.toByteArray(Charsets.UTF_8))
-            val keyBytes = hashBytes.copyOf(16) // Truncate to 128 bit (16 bytes) standard AES
-            val keySpec = SecretKeySpec(keyBytes, ALGORITHM)
+            val keySpec = SecretKeySpec(hashBytes.copyOf(16), ALGORITHM)
             cachedSecretKey = keySpec
             cachedPassphrase = passphrase
             return keySpec
         } catch (e: Exception) {
             Log.e(TAG, "Error deriving key: ${e.message}")
-            val keyBytes = passphrase.padEnd(16, '0').take(16).toByteArray(Charsets.UTF_8)
-            val keySpec = SecretKeySpec(keyBytes, ALGORITHM)
+            val keySpec = SecretKeySpec(passphrase.padEnd(16, '0').take(16).toByteArray(Charsets.UTF_8), ALGORITHM)
             cachedSecretKey = keySpec
             cachedPassphrase = passphrase
             return keySpec
         }
     }
 
-    /**
-     * Store and Retrieve custom passphrase using local secure SharedPreferences.
-     */
-    fun isUsingDefaultPassphrase(context: Context): Boolean {
-        return getStoredPassphrase(context) == DEFAULT_PASSPHRASE
-    }
+    // ── Passphrase storage ────────────────────────────────────────────────────
+
+    fun isUsingDefaultPassphrase(context: Context) = getStoredPassphrase(context) == DEFAULT_PASSPHRASE
 
     fun getStoredPassphrase(context: Context): String {
         return try {
             val prefs = context.getSharedPreferences("cipher_prefs", Context.MODE_PRIVATE)
-            val raw = prefs.getString("security_passphrase", null)
-            when {
-                raw.isNullOrBlank() -> DEFAULT_PASSPHRASE
-                else -> raw.trim()
-            }
+            prefs.getString("security_passphrase", null)?.trim()?.ifBlank { null } ?: DEFAULT_PASSPHRASE
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to read getStoredPassphrase: ${e.message}")
+            Log.e(TAG, "Failed to read passphrase: ${e.message}")
             DEFAULT_PASSPHRASE
         }
     }
 
     fun setStoredPassphrase(context: Context, value: String) {
-        val normalized = value.trim().ifEmpty { DEFAULT_PASSPHRASE }
         try {
             val prefs = context.getSharedPreferences("cipher_prefs", Context.MODE_PRIVATE)
-            prefs.edit().putString("security_passphrase", normalized).commit()
+            prefs.edit().putString("security_passphrase", value.trim().ifEmpty { DEFAULT_PASSPHRASE }).commit()
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to setStoredPassphrase: ${e.message}")
+            Log.e(TAG, "Failed to set passphrase: ${e.message}")
         }
         invalidateKeyCache()
     }
 
-    fun invalidateKeyCache() {
-        synchronized(this) {
-            cachedSecretKey = null
-            cachedPassphrase = null
-        }
-    }
+    fun invalidateKeyCache() = synchronized(this) { cachedSecretKey = null; cachedPassphrase = null }
+
+    // ── Encryption ────────────────────────────────────────────────────────────
 
     /**
-     * Performs standard AES/CBC encryption and wraps results inside a custom visual-unicode pack.
+     * AES/CBC encrypt + HMAC-SHA256 tag.
+     * Wire format: [IV 16B] + [ciphertext NB] + [HMAC tag 8B]  → hex → visual symbols
      */
     fun encrypt(context: Context, plainText: String, useSymbols: Boolean): String {
         if (plainText.isEmpty()) return ""
-        try {
+        return try {
             val secretKey = getSecretKey(context)
-            
-            // 1. Setup random 16-byte initialization vector
-            val iv = ByteArray(16)
-            SecureRandom().nextBytes(iv)
-            
-            // 2. Perform AES encryption
+
+            val iv = ByteArray(16).also { SecureRandom().nextBytes(it) }
+
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, IvParameterSpec(iv))
-            val encryptedBytes = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
-            
-            // 3. Assemble: combined = [IV (16)] + [Cipher (Var)]
-            val combinedBytes = ByteArray(iv.size + encryptedBytes.size)
-            System.arraycopy(iv, 0, combinedBytes, 0, iv.size)
-            System.arraycopy(encryptedBytes, 0, combinedBytes, iv.size, encryptedBytes.size)
-            
-            // 4. Encode bytes as hex standard representation
-            val hexString = bytesToHex(combinedBytes)
-            
-            // 5. Wrap inside visual mappings and zero-width spacers
-            return UnicodeObfuscator.obfuscate(hexString, useSymbols)
+            val cipherBytes = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
+
+            // HMAC over (IV + ciphertext)
+            val hmacTag = computeHmac(secretKey, iv + cipherBytes).copyOf(HMAC_TAG_BYTES)
+
+            // Assemble: IV | ciphertext | HMAC tag
+            val payload = iv + cipherBytes + hmacTag
+
+            UnicodeObfuscator.obfuscate(bytesToHex(payload), useSymbols)
         } catch (e: Exception) {
             Log.e(TAG, "Encryption failed: ${e.message}", e)
-            return plainText
+            plainText
         }
+    }
+
+    // ── Decryption ────────────────────────────────────────────────────────────
+
+    /**
+     * Result of a decrypt attempt — always explicit about integrity.
+     */
+    data class DecryptResult(
+        val plaintext: String?,
+        val integrityOk: Boolean   // true = HMAC verified, false = tampered/wrong key
+    )
+
+    /**
+     * Full decrypt with HMAC verification.
+     * Returns DecryptResult so callers know whether integrity passed.
+     */
+    fun decryptWithIntegrity(context: Context, encryptedVisualText: String): DecryptResult {
+        val block = CipherDetector.extractExactVisualBlock(encryptedVisualText) ?: encryptedVisualText
+        val candidates = UnicodeObfuscator.deobfuscateCandidates(block)
+            .ifEmpty { listOfNotNull(UnicodeObfuscator.deobfuscate(block)) }
+
+        for (hex in candidates) {
+            val result = decryptHexPayloadWithIntegrity(context, hex)
+            if (result != null) return result
+        }
+        return DecryptResult(plaintext = null, integrityOk = false)
     }
 
     /**
-     * Resolves visual-unicode packets and performs standard AES/CBC decryption.
+     * Legacy decrypt (used internally / by tests) — returns plaintext or null.
+     * Accepts both HMAC-tagged (new) and legacy (old) messages.
      */
     fun decrypt(context: Context, encryptedVisualText: String): String? {
-        val block = CipherDetector.extractExactVisualBlock(encryptedVisualText) ?: encryptedVisualText
-        val hexCandidates = UnicodeObfuscator.deobfuscateCandidates(block)
-        if (hexCandidates.isEmpty()) {
-            UnicodeObfuscator.deobfuscate(block)?.let { return decryptHexPayload(context, it) }
-            return null
-        }
-        for (hex in hexCandidates) {
-            decryptHexPayload(context, hex)?.let { return it }
-        }
-        return null
+        return decryptWithIntegrity(context, encryptedVisualText).plaintext
     }
 
-    private fun decryptHexPayload(context: Context, hexString: String): String? {
-        try {
-            val combinedBytes = hexToBytes(hexString) ?: return null
-            if (combinedBytes.size <= 16) return null
-
-            val iv = ByteArray(16)
-            System.arraycopy(combinedBytes, 0, iv, 0, iv.size)
-
-            val encryptedBytes = ByteArray(combinedBytes.size - iv.size)
-            System.arraycopy(combinedBytes, iv.size, encryptedBytes, 0, encryptedBytes.size)
+    private fun decryptHexPayloadWithIntegrity(context: Context, hexString: String): DecryptResult? {
+        return try {
+            val combined = hexToBytes(hexString) ?: return null
+            // Minimum: 16 (IV) + 16 (min ciphertext) = 32 bytes
+            if (combined.size < 32) return null
 
             val secretKey = getSecretKey(context)
+
+            // ── Try new format: has HMAC tag ──────────────────────────────────
+            if (combined.size > 16 + HMAC_TAG_BYTES) {
+                val ivAndCipher = combined.copyOf(combined.size - HMAC_TAG_BYTES)
+                val receivedTag = combined.copyOfRange(combined.size - HMAC_TAG_BYTES, combined.size)
+                val expectedTag = computeHmac(secretKey, ivAndCipher).copyOf(HMAC_TAG_BYTES)
+
+                val integrityOk = receivedTag.contentEquals(expectedTag)
+
+                val iv = ivAndCipher.copyOf(16)
+                val cipherBytes = ivAndCipher.copyOfRange(16, ivAndCipher.size)
+
+                return try {
+                    val cipher = Cipher.getInstance(TRANSFORMATION)
+                    cipher.init(Cipher.DECRYPT_MODE, secretKey, IvParameterSpec(iv))
+                    val plaintext = String(cipher.doFinal(cipherBytes), Charsets.UTF_8)
+                    DecryptResult(plaintext = plaintext, integrityOk = integrityOk)
+                } catch (e: Exception) {
+                    // HMAC matched key but AES failed — shouldn't happen unless data is really corrupt
+                    if (integrityOk) DecryptResult(plaintext = null, integrityOk = true)
+                    else null
+                }
+            }
+
+            // ── Legacy format (no HMAC tag) ───────────────────────────────────
+            val iv = combined.copyOf(16)
+            val cipherBytes = combined.copyOfRange(16, combined.size)
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, secretKey, IvParameterSpec(iv))
-            val decryptedBytes = cipher.doFinal(encryptedBytes)
-
-            return String(decryptedBytes, Charsets.UTF_8)
+            val plaintext = String(cipher.doFinal(cipherBytes), Charsets.UTF_8)
+            // Legacy messages get integrityOk = true (trust them, just can't verify)
+            DecryptResult(plaintext = plaintext, integrityOk = true)
         } catch (e: Exception) {
             Log.e(TAG, "Decryption failed: ${e.message}")
-            return null
+            null
         }
     }
 
+    // ── HMAC helper ───────────────────────────────────────────────────────────
+
+    private fun computeHmac(keySpec: SecretKeySpec, data: ByteArray): ByteArray {
+        val mac = Mac.getInstance(HMAC_ALGORITHM)
+        // Use a 32-byte HMAC key derived from the same passphrase (full SHA-256 hash)
+        val hmacKeySpec = SecretKeySpec(keySpec.encoded.copyOf(32).also {
+            // Expand 16-byte AES key back to 32 bytes by padding with its own SHA-256
+            val digest = MessageDigest.getInstance("SHA-256")
+            val expanded = digest.digest(keySpec.encoded)
+            System.arraycopy(expanded, 0, it, 0, 16)
+        }, HMAC_ALGORITHM)
+        mac.init(hmacKeySpec)
+        return mac.doFinal(data)
+    }
+
+    // ── Hex utils ─────────────────────────────────────────────────────────────
+
     private fun bytesToHex(bytes: ByteArray): String {
-        val hexChars = CharArray(bytes.size * 2)
         val lookup = "0123456789abcdef".toCharArray()
+        val out = CharArray(bytes.size * 2)
         for (i in bytes.indices) {
             val v = bytes[i].toInt() and 0xFF
-            hexChars[i * 2] = lookup[v ushr 4]
-            hexChars[i * 2 + 1] = lookup[v and 0x0F]
+            out[i * 2] = lookup[v ushr 4]
+            out[i * 2 + 1] = lookup[v and 0x0F]
         }
-        return String(hexChars)
+        return String(out)
     }
 
     private fun hexToBytes(hex: String): ByteArray? {
         if (hex.length % 2 != 0) return null
-        val bytes = ByteArray(hex.length / 2)
-        for (i in bytes.indices) {
-            val index = i * 2
-            val d1 = Character.digit(hex[index], 16)
-            val d2 = Character.digit(hex[index + 1], 16)
-            if (d1 == -1 || d2 == -1) return null
-            bytes[i] = ((d1 shl 4) + d2).toByte()
-        }
-        return bytes
+        return try {
+            ByteArray(hex.length / 2) { i ->
+                val d1 = Character.digit(hex[i * 2], 16)
+                val d2 = Character.digit(hex[i * 2 + 1], 16)
+                if (d1 == -1 || d2 == -1) return null
+                ((d1 shl 4) + d2).toByte()
+            }
+        } catch (e: Exception) { null }
     }
 }

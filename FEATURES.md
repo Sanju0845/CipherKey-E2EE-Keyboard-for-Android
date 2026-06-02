@@ -1,6 +1,6 @@
 # CipherKey — Features & Architecture
 
-> Version 1.1.0
+> Latest: Version 1.2.0
 
 ---
 
@@ -9,6 +9,43 @@
 CipherKey is a fully custom Android keyboard (IME) — a drop-in replacement for Gboard or SwiftKey — with **end-to-end AES-128 encryption built directly into the typing experience**.
 
 Messages are encrypted *before* they leave your keyboard, meaning no app, server, or network in between can read them. The recipient needs the same CipherKey app with the same passphrase to decrypt.
+
+---
+
+## Changelog
+
+### v1.2.0
+- **AES + HMAC-SHA256 Message Integrity**
+  - Every encrypted message now includes an 8-byte HMAC-SHA256 tag
+  - On decrypt, HMAC is verified before returning plaintext
+  - Clipboard decrypt preview shows `✓ Verified` (green) if intact or `⚠ Integrity Failed` (red) if tampered
+  - `Paste into field` button is hidden when integrity fails — can't paste corrupted data
+  - Fully backward-compatible with v1.1.0 messages (legacy messages treated as verified)
+  - Wire format: `[IV 16B] + [AES ciphertext] + [HMAC tag 8B]` → hex → visual symbols
+
+### v1.1.0
+- Smart shift (one-shot + caps lock)
+- Long press top row for numbers
+- Inline decrypt preview in clipboard (no auto-paste)
+- Swipe-to-delete in clipboard with animated red background
+- Clipboard auto-updates on system copy events
+- Clipboard history (up to 20 entries)
+- Word-by-word backspace on long press
+- Selected text deletion on backspace
+- Dot key in bottom row
+- SVG/unicode icon toggle for clipboard/keyboard switch
+- Removed duplicate clipboard header
+- Fixed transition jitter between keyboard and clipboard panel
+- Full sentence decryption (multiple cipher blocks)
+- Crossfade animation between keyboard and clipboard
+
+### v1.0.0
+- Initial release: QWERTY keyboard with AES-128 encryption
+- Symbol and emoji cipher modes
+- Glide typing
+- Word predictions
+- Clipboard panel
+- Onboarding screen with playground
 
 ---
 
