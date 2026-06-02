@@ -14,9 +14,13 @@ import com.example.ui.theme.*
 enum class KeyboardPage {
     LETTERS_LOWER,
     LETTERS_UPPER,
+    LETTERS_CAPS_LOCK,
     NUMBERS_SYMBOLS,
     ALT_SYMBOLS
 }
+
+// Shift state machine
+enum class ShiftState { OFF, ONE_SHOT, CAPS_LOCK }
 
 @Composable
 fun KeyboardView(
@@ -27,186 +31,161 @@ fun KeyboardView(
     onKeyPress: (String) -> Unit,
     onGlideWord: (String) -> Unit,
     onBackspace: () -> Unit,
+    onDeleteWord: () -> Unit,
     onSpace: () -> Unit,
     onEnter: () -> Unit,
     onToggleCipher: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val glideEnabled = activePage == KeyboardPage.LETTERS_LOWER || activePage == KeyboardPage.LETTERS_UPPER
+    // Shift state: OFF / ONE_SHOT / CAPS_LOCK
+    var shiftState by remember { mutableStateOf(ShiftState.OFF) }
+    var lastShiftTapMs by remember { mutableStateOf(0L) }
+
+    val isUpper = shiftState != ShiftState.OFF ||
+            activePage == KeyboardPage.LETTERS_UPPER ||
+            activePage == KeyboardPage.LETTERS_CAPS_LOCK
+    val isCapsLock = shiftState == ShiftState.CAPS_LOCK ||
+            activePage == KeyboardPage.LETTERS_CAPS_LOCK
+
+    fun onShiftTap() {
+        val now = System.currentTimeMillis()
+        shiftState = when {
+            shiftState == ShiftState.CAPS_LOCK -> ShiftState.OFF
+            shiftState == ShiftState.ONE_SHOT && (now - lastShiftTapMs) < 400L -> ShiftState.CAPS_LOCK
+            else -> ShiftState.ONE_SHOT
+        }
+        lastShiftTapMs = now
+    }
+
+    // After a key is pressed in ONE_SHOT mode, drop back to OFF
+    fun onLetterKey(key: String) {
+        val actual = if (isUpper) key.uppercase() else key.lowercase()
+        onKeyPress(actual)
+        if (shiftState == ShiftState.ONE_SHOT) shiftState = ShiftState.OFF
+    }
+
+    val glideEnabled = activePage == KeyboardPage.LETTERS_LOWER ||
+            activePage == KeyboardPage.LETTERS_UPPER ||
+            activePage == KeyboardPage.LETTERS_CAPS_LOCK
+
+    val topRowLetters = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p")
+    val topRowNumbers = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .background(ImmersiveSurface)
-            .padding(start = 4.dp, end = 4.dp, bottom = 6.dp)
+            .padding(start = 4.dp, end = 4.dp, bottom = 0.dp)  // no bottom gap
             .testTag("keyboard_keys_layout")
     ) {
-        when (activePage) {
-            KeyboardPage.LETTERS_LOWER -> {
-                GlideLetterRow(
-                    keys = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"),
+        when {
+            // ── Letter pages ──────────────────────────────────────────────────
+            activePage == KeyboardPage.LETTERS_LOWER ||
+            activePage == KeyboardPage.LETTERS_UPPER ||
+            activePage == KeyboardPage.LETTERS_CAPS_LOCK -> {
+
+                // Row 1: q-p with long-press numbers
+                NumberLongPressRow(
+                    letters = topRowLetters,
+                    numbers = topRowNumbers,
+                    isUpper = isUpper,
                     glideEnabled = glideEnabled,
-                    onKeyPress = onKeyPress,
-                    onGlideWord = onGlideWord
+                    onKeyPress = { onLetterKey(it) },
+                    onGlideWord = { word ->
+                        val actual = if (isUpper) word.uppercase() else word
+                        onGlideWord(actual)
+                        if (shiftState == ShiftState.ONE_SHOT) shiftState = ShiftState.OFF
+                    }
                 )
+
+                // Row 2: a-l
                 GlideLetterRow(
                     keys = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"),
+                    isUpper = isUpper,
                     glideEnabled = glideEnabled,
-                    rowPaddingStart = 12.dp,
-                    rowPaddingEnd = 12.dp,
-                    onKeyPress = onKeyPress,
-                    onGlideWord = onGlideWord
+                    rowPaddingStart = 16.dp,
+                    rowPaddingEnd = 16.dp,
+                    onKeyPress = { onLetterKey(it) },
+                    onGlideWord = { word ->
+                        val actual = if (isUpper) word.uppercase() else word
+                        onGlideWord(actual)
+                        if (shiftState == ShiftState.ONE_SHOT) shiftState = ShiftState.OFF
+                    }
                 )
+
+                // Row 3: shift + z-m + backspace
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 4.dp, vertical = 3.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    SpecialKey(
-                        label = "⇧",
+                    ShiftKey(
+                        shiftState = shiftState,
                         modifier = Modifier.weight(1.5f),
-                        onClick = { onPageChange(KeyboardPage.LETTERS_UPPER) },
-                        bgColor = Slate700.copy(alpha = 0.55f)
+                        onTap = { onShiftTap() }
                     )
                     Box(modifier = Modifier.weight(7f)) {
                         GlideLetterRow(
                             keys = listOf("z", "x", "c", "v", "b", "n", "m"),
+                            isUpper = isUpper,
                             glideEnabled = glideEnabled,
                             rowPaddingStart = 0.dp,
                             rowPaddingEnd = 0.dp,
-                            onKeyPress = onKeyPress,
-                            onGlideWord = onGlideWord
+                            onKeyPress = { onLetterKey(it) },
+                            onGlideWord = { word ->
+                                val actual = if (isUpper) word.uppercase() else word
+                                onGlideWord(actual)
+                                if (shiftState == ShiftState.ONE_SHOT) shiftState = ShiftState.OFF
+                            }
                         )
                     }
-                    SpecialKey(
-                        label = "⌫",
+                    BackspaceKey(
                         modifier = Modifier.weight(1.5f),
-                        onClick = onBackspace,
-                        bgColor = Slate700.copy(alpha = 0.55f)
+                        onBackspace = onBackspace,
+                        onDeleteWord = onDeleteWord
                     )
                 }
             }
-            KeyboardPage.LETTERS_UPPER -> {
-                GlideLetterRow(
-                    keys = listOf("Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"),
-                    glideEnabled = glideEnabled,
-                    onKeyPress = onKeyPress,
-                    onGlideWord = onGlideWord
-                )
-                GlideLetterRow(
-                    keys = listOf("A", "S", "D", "F", "G", "H", "J", "K", "L"),
-                    glideEnabled = glideEnabled,
-                    rowPaddingStart = 12.dp,
-                    rowPaddingEnd = 12.dp,
-                    onKeyPress = onKeyPress,
-                    onGlideWord = onGlideWord
-                )
+
+            // ── Numbers / symbols ─────────────────────────────────────────────
+            activePage == KeyboardPage.NUMBERS_SYMBOLS -> {
+                StaticKeyRow(listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"), onKeyPress)
+                StaticKeyRow(listOf("@", "#", "$", "%", "&", "-", "+", "(", ")"), onKeyPress)
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 3.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 3.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    SpecialKey(
-                        label = "⇪",
-                        modifier = Modifier.weight(1.5f),
-                        onClick = { onPageChange(KeyboardPage.LETTERS_LOWER) },
-                        bgColor = ImmersiveCyan,
-                        textColor = Color.Black
-                    )
-                    Box(modifier = Modifier.weight(7f)) {
-                        GlideLetterRow(
-                            keys = listOf("Z", "X", "C", "V", "B", "N", "M"),
-                            glideEnabled = glideEnabled,
-                            rowPaddingStart = 0.dp,
-                            rowPaddingEnd = 0.dp,
-                            onKeyPress = onKeyPress,
-                            onGlideWord = onGlideWord
-                        )
+                    SpecialKey("=\\<", Modifier.weight(1.5f), Slate700.copy(alpha = 0.55f)) {
+                        onPageChange(KeyboardPage.ALT_SYMBOLS)
                     }
-                    SpecialKey(
-                        label = "⌫",
-                        modifier = Modifier.weight(1.5f),
-                        onClick = onBackspace,
-                        bgColor = Slate700.copy(alpha = 0.55f)
-                    )
+                    listOf("*", "\"", "'", ":", ";", "!", "?").forEach { k ->
+                        StandardKey(k, Modifier.weight(1f), onClick = { onKeyPress(k) })
+                    }
+                    BackspaceKey(Modifier.weight(1.5f), onBackspace, onDeleteWord)
                 }
             }
-            KeyboardPage.NUMBERS_SYMBOLS -> {
-                StaticKeyRow(
-                    keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"),
-                    onKeyPress = onKeyPress
-                )
-                StaticKeyRow(
-                    keys = listOf("@", "#", "$", "%", "&", "-", "+", "(", ")"),
-                    onKeyPress = onKeyPress
-                )
+
+            // ── Alt symbols ───────────────────────────────────────────────────
+            else -> {
+                StaticKeyRow(listOf("~", "`", "|", "•", "√", "π", "÷", "×", "{", "}"), onKeyPress)
+                StaticKeyRow(listOf("[", "]", "\\", "^", "_", "=", "<", ">", "¥"), onKeyPress)
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 3.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 3.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    SpecialKey(
-                        label = "=\\<",
-                        modifier = Modifier.weight(1.5f),
-                        onClick = { onPageChange(KeyboardPage.ALT_SYMBOLS) },
-                        bgColor = Slate700.copy(alpha = 0.55f)
-                    )
-                    listOf("*", "\"", "'", ":", ";", "!", "?").forEach { key ->
-                        StandardKey(
-                            label = key,
-                            modifier = Modifier.weight(1f),
-                            onClick = { onKeyPress(key) }
-                        )
+                    SpecialKey("?123", Modifier.weight(1.5f), Slate700.copy(alpha = 0.55f)) {
+                        onPageChange(KeyboardPage.NUMBERS_SYMBOLS)
                     }
-                    SpecialKey(
-                        label = "⌫",
-                        modifier = Modifier.weight(1.5f),
-                        onClick = onBackspace,
-                        bgColor = Slate700.copy(alpha = 0.55f)
-                    )
-                }
-            }
-            KeyboardPage.ALT_SYMBOLS -> {
-                StaticKeyRow(
-                    keys = listOf("~", "`", "|", "•", "√", "π", "÷", "×", "{", "}"),
-                    onKeyPress = onKeyPress
-                )
-                StaticKeyRow(
-                    keys = listOf("[", "]", "\\", "^", "_", "=", "<", ">", "¥"),
-                    onKeyPress = onKeyPress
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 3.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    SpecialKey(
-                        label = "?123",
-                        modifier = Modifier.weight(1.5f),
-                        onClick = { onPageChange(KeyboardPage.NUMBERS_SYMBOLS) },
-                        bgColor = Slate700.copy(alpha = 0.55f)
-                    )
-                    listOf("¢", "£", "¤", "°", "¡", "¿", "§").forEach { key ->
-                        StandardKey(
-                            label = key,
-                            modifier = Modifier.weight(1f),
-                            onClick = { onKeyPress(key) }
-                        )
+                    listOf("¢", "£", "¤", "°", "¡", "¿", "§").forEach { k ->
+                        StandardKey(k, Modifier.weight(1f), onClick = { onKeyPress(k) })
                     }
-                    SpecialKey(
-                        label = "⌫",
-                        modifier = Modifier.weight(1.5f),
-                        onClick = onBackspace,
-                        bgColor = Slate700.copy(alpha = 0.55f)
-                    )
+                    BackspaceKey(Modifier.weight(1.5f), onBackspace, onDeleteWord)
                 }
             }
         }
 
+        // ── Bottom row: ?123 | 🔒 | space | ↩ ───────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -214,51 +193,127 @@ fun KeyboardView(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val symbolToggleLabel =
-                if (activePage == KeyboardPage.LETTERS_LOWER || activePage == KeyboardPage.LETTERS_UPPER) "?123" else "ABC"
+            val symLabel = when (activePage) {
+                KeyboardPage.NUMBERS_SYMBOLS, KeyboardPage.ALT_SYMBOLS -> "ABC"
+                else -> "?123"
+            }
             SpecialKey(
-                label = symbolToggleLabel,
+                label = symLabel,
                 modifier = Modifier.weight(1.5f),
+                bgColor = Slate700.copy(alpha = 0.55f),
                 onClick = {
-                    if (activePage == KeyboardPage.LETTERS_LOWER || activePage == KeyboardPage.LETTERS_UPPER) {
-                        onPageChange(KeyboardPage.NUMBERS_SYMBOLS)
-                    } else {
-                        onPageChange(KeyboardPage.LETTERS_LOWER)
+                    when (activePage) {
+                        KeyboardPage.NUMBERS_SYMBOLS, KeyboardPage.ALT_SYMBOLS ->
+                            onPageChange(KeyboardPage.LETTERS_LOWER)
+                        else -> onPageChange(KeyboardPage.NUMBERS_SYMBOLS)
                     }
-                },
-                bgColor = Slate700.copy(alpha = 0.55f)
+                }
             )
             SpecialKey(
-                label = if (isCipherModeOn) "🔒 ON" else "🔓 OFF",
+                label = if (isCipherModeOn) "🔒" else "🔓",
                 modifier = Modifier.weight(1.5f),
-                onClick = onToggleCipher,
-                bgColor = if (isCipherModeOn) {
-                    if (useSymbols) ImmersiveCyan else ImmersiveIndigoLight
-                } else {
-                    Slate700.copy(alpha = 0.55f)
-                },
-                textColor = if (isCipherModeOn) Color.Black else Slate100
+                bgColor = if (isCipherModeOn) ImmersiveCyan else Slate700.copy(alpha = 0.55f),
+                textColor = if (isCipherModeOn) Color.Black else Slate100,
+                onClick = onToggleCipher
             )
             StandardKey(
                 label = "space",
                 modifier = Modifier.weight(3.5f),
-                onClick = onSpace,
-                bgColor = if (isCipherModeOn) Slate700 else Slate800
+                bgColor = if (isCipherModeOn) Slate700 else Slate800,
+                onClick = onSpace
+            )
+            StandardKey(
+                label = ".",
+                modifier = Modifier.weight(1f),
+                bgColor = Slate700.copy(alpha = 0.55f),
+                onClick = { onKeyPress(".") }
             )
             SpecialKey(
                 label = "↩",
                 modifier = Modifier.weight(1.5f),
-                onClick = onEnter,
                 bgColor = ImmersiveIndigo,
-                textColor = Color.White
+                textColor = Color.White,
+                onClick = onEnter
             )
         }
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Shift key — shows ⇧ (off), filled ⇧ (one-shot), ⇪ (caps lock)
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+private fun ShiftKey(
+    shiftState: ShiftState,
+    modifier: Modifier = Modifier,
+    onTap: () -> Unit
+) {
+    val bg = when (shiftState) {
+        ShiftState.OFF -> Slate700.copy(alpha = 0.55f)
+        ShiftState.ONE_SHOT -> ImmersiveCyan.copy(alpha = 0.7f)
+        ShiftState.CAPS_LOCK -> ImmersiveCyan
+    }
+    val textColor = when (shiftState) {
+        ShiftState.OFF -> Slate100
+        else -> Color.Black
+    }
+    val label = when (shiftState) {
+        ShiftState.OFF -> "⇧"
+        ShiftState.ONE_SHOT -> "⇧"
+        ShiftState.CAPS_LOCK -> "⇪"
+    }
+    SpecialKey(label = label, modifier = modifier, bgColor = bg, textColor = textColor, onClick = onTap)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Top row with long-press numbers
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+private fun NumberLongPressRow(
+    letters: List<String>,
+    numbers: List<String>,
+    isUpper: Boolean,
+    glideEnabled: Boolean,
+    onKeyPress: (String) -> Unit,
+    onGlideWord: (String) -> Unit
+) {
+    val tracker = remember { GlideKeyTracker() }
+    var glideHighlightKey by remember { mutableStateOf<String?>(null) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, end = 4.dp, top = 3.dp, bottom = 3.dp)
+            .glideRowGestures(
+                tracker = tracker,
+                enabled = glideEnabled,
+                onGlideWord = onGlideWord,
+                onHighlightKey = { glideHighlightKey = it }
+            ),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        letters.forEachIndexed { i, letter ->
+            val number = numbers[i]
+            val display = if (isUpper) letter.uppercase() else letter
+            LongPressKey(
+                label = display,
+                longPressLabel = number,
+                modifier = Modifier.weight(1f).trackGlideKey(display, tracker),
+                glideHighlight = glideHighlightKey == display,
+                onTap = { onKeyPress(display) },
+                onLongPress = { onKeyPress(number) }
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Glide letter row (rows 2 and 3)
+// ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun GlideLetterRow(
     keys: List<String>,
+    isUpper: Boolean,
     glideEnabled: Boolean,
     modifier: Modifier = Modifier,
     rowPaddingStart: Dp = 4.dp,
@@ -282,13 +337,12 @@ private fun GlideLetterRow(
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         keys.forEach { key ->
+            val display = if (isUpper) key.uppercase() else key
             StandardKey(
-                label = key,
-                modifier = Modifier
-                    .weight(1f)
-                    .trackGlideKey(key, tracker),
-                onClick = { onKeyPress(key) },
-                glideHighlight = glideHighlightKey == key
+                label = display,
+                modifier = Modifier.weight(1f).trackGlideKey(display, tracker),
+                onClick = { onKeyPress(display) },
+                glideHighlight = glideHighlightKey == display
             )
         }
     }
@@ -297,9 +351,9 @@ private fun GlideLetterRow(
 @Composable
 private fun StaticKeyRow(
     keys: List<String>,
+    onKeyPress: (String) -> Unit,
     rowPaddingStart: Dp = 4.dp,
-    rowPaddingEnd: Dp = 4.dp,
-    onKeyPress: (String) -> Unit
+    rowPaddingEnd: Dp = 4.dp
 ) {
     Row(
         modifier = Modifier
@@ -308,11 +362,7 @@ private fun StaticKeyRow(
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         keys.forEach { key ->
-            StandardKey(
-                label = key,
-                modifier = Modifier.weight(1f),
-                onClick = { onKeyPress(key) }
-            )
+            StandardKey(key, Modifier.weight(1f), onClick = { onKeyPress(key) })
         }
     }
 }

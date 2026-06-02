@@ -13,8 +13,8 @@ object CipherEngine {
     private const val ALGORITHM = "AES"
     private const val TRANSFORMATION = "AES/CBC/PKCS5Padding"
     
-    // Default secret password so different keyboards can read standard messages
-    private const val DEFAULT_PASSPHRASE = "CipherKeyDefaultSharedKey#2026!"
+    /** Shared out-of-the-box key; must match on sender and receiver. */
+    const val DEFAULT_PASSPHRASE = "CipherKeyDefaultSharedKey#2026!"
     
     private var cachedSecretKey: SecretKeySpec? = null
     private var cachedPassphrase: String? = null
@@ -51,10 +51,18 @@ object CipherEngine {
     /**
      * Store and Retrieve custom passphrase using local secure SharedPreferences.
      */
+    fun isUsingDefaultPassphrase(context: Context): Boolean {
+        return getStoredPassphrase(context) == DEFAULT_PASSPHRASE
+    }
+
     fun getStoredPassphrase(context: Context): String {
         return try {
             val prefs = context.getSharedPreferences("cipher_prefs", Context.MODE_PRIVATE)
-            prefs.getString("security_passphrase", DEFAULT_PASSPHRASE) ?: DEFAULT_PASSPHRASE
+            val raw = prefs.getString("security_passphrase", null)
+            when {
+                raw.isNullOrBlank() -> DEFAULT_PASSPHRASE
+                else -> raw.trim()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read getStoredPassphrase: ${e.message}")
             DEFAULT_PASSPHRASE
@@ -62,12 +70,17 @@ object CipherEngine {
     }
 
     fun setStoredPassphrase(context: Context, value: String) {
+        val normalized = value.trim().ifEmpty { DEFAULT_PASSPHRASE }
         try {
             val prefs = context.getSharedPreferences("cipher_prefs", Context.MODE_PRIVATE)
-            prefs.edit().putString("security_passphrase", value.ifEmpty { DEFAULT_PASSPHRASE }).apply()
+            prefs.edit().putString("security_passphrase", normalized).commit()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to setStoredPassphrase: ${e.message}")
         }
+        invalidateKeyCache()
+    }
+
+    fun invalidateKeyCache() {
         synchronized(this) {
             cachedSecretKey = null
             cachedPassphrase = null
@@ -111,30 +124,34 @@ object CipherEngine {
      * Resolves visual-unicode packets and performs standard AES/CBC decryption.
      */
     fun decrypt(context: Context, encryptedVisualText: String): String? {
+        val block = CipherDetector.extractExactVisualBlock(encryptedVisualText) ?: encryptedVisualText
+        val hexCandidates = UnicodeObfuscator.deobfuscateCandidates(block)
+        if (hexCandidates.isEmpty()) {
+            UnicodeObfuscator.deobfuscate(block)?.let { return decryptHexPayload(context, it) }
+            return null
+        }
+        for (hex in hexCandidates) {
+            decryptHexPayload(context, hex)?.let { return it }
+        }
+        return null
+    }
+
+    private fun decryptHexPayload(context: Context, hexString: String): String? {
         try {
-            val block = CipherDetector.extractExactVisualBlock(encryptedVisualText) ?: encryptedVisualText
-            
-            // 1. Unwrap visual elements back to raw hex stream
-            val hexString = UnicodeObfuscator.deobfuscate(block) ?: return null
-            if (hexString.isEmpty()) return null
-            
-            // 2. Hex back to bytes
             val combinedBytes = hexToBytes(hexString) ?: return null
             if (combinedBytes.size <= 16) return null
-            
-            // 3. Separate IV and Cipher bytes
+
             val iv = ByteArray(16)
             System.arraycopy(combinedBytes, 0, iv, 0, iv.size)
-            
+
             val encryptedBytes = ByteArray(combinedBytes.size - iv.size)
             System.arraycopy(combinedBytes, iv.size, encryptedBytes, 0, encryptedBytes.size)
-            
-            // 4. Perform AES/CBC Decryption
+
             val secretKey = getSecretKey(context)
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, secretKey, IvParameterSpec(iv))
             val decryptedBytes = cipher.doFinal(encryptedBytes)
-            
+
             return String(decryptedBytes, Charsets.UTF_8)
         } catch (e: Exception) {
             Log.e(TAG, "Decryption failed: ${e.message}")

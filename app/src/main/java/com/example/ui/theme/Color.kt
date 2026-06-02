@@ -18,6 +18,7 @@ val ImmersiveCyanTransparent = Color(0x3322D3EE)   // Cyan-400 bg pulse
 
 // Text & Neutral Slates
 val Slate100 = Color(0xFFF1F5F9)
+val Slate200 = Color(0xFFE2E8F0)
 val Slate300 = Color(0xFFCBD5E1)
 val Slate400 = Color(0xFF94A3B8)
 val Slate500 = Color(0xFF64748B)

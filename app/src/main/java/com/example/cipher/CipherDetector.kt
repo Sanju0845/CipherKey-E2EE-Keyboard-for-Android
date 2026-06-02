@@ -4,15 +4,14 @@ object CipherDetector {
     /**
      * Instantly checks if any text contains or represents a CipherKey package layout.
      */
-    fun isCipherText(text: String): Boolean {
-        val cleaned = InvisibleCharInjector.remove(text).trim()
-        
-        val hasSymbols = cleaned.contains(UnicodeObfuscator.SYMBOL_PREFIX) && 
-                         cleaned.contains(UnicodeObfuscator.SYMBOL_SUFFIX)
-                         
-        val hasEmojis = cleaned.contains(UnicodeObfuscator.EMOJI_PREFIX) && 
-                        cleaned.contains(UnicodeObfuscator.EMOJI_SUFFIX)
-                        
+    fun isCipherText(text: String): Boolean = looksLikeCipher(text)
+
+    fun looksLikeCipher(text: String): Boolean {
+        val cleaned = normalizeForDetection(text)
+        val hasSymbols = cleaned.contains(UnicodeObfuscator.SYMBOL_PREFIX) &&
+            cleaned.contains(UnicodeObfuscator.SYMBOL_SUFFIX)
+        val hasEmojis = cleaned.contains(UnicodeObfuscator.EMOJI_PREFIX) &&
+            cleaned.contains(UnicodeObfuscator.EMOJI_SUFFIX)
         return hasSymbols || hasEmojis
     }
 
@@ -20,25 +19,41 @@ object CipherDetector {
      * Extracts the specific styled CipherKey visual block from a surround message (if any).
      */
     fun extractExactVisualBlock(text: String): String? {
-        // Find standard symbol boundaries in the original text
-        val symStart = text.indexOf(UnicodeObfuscator.SYMBOL_PREFIX)
-        if (symStart != -1) {
-            val symEnd = text.indexOf(UnicodeObfuscator.SYMBOL_SUFFIX, symStart + UnicodeObfuscator.SYMBOL_PREFIX.length)
-            if (symEnd != -1) {
-                return text.substring(symStart, symEnd + UnicodeObfuscator.SYMBOL_SUFFIX.length)
+        val sources = listOf(text, normalizeForDetection(text)).distinct()
+        for (source in sources) {
+            val symStart = source.indexOf(UnicodeObfuscator.SYMBOL_PREFIX)
+            if (symStart != -1) {
+                val symEnd = source.indexOf(
+                    UnicodeObfuscator.SYMBOL_SUFFIX,
+                    symStart + UnicodeObfuscator.SYMBOL_PREFIX.length
+                )
+                if (symEnd != -1) {
+                    return source.substring(symStart, symEnd + UnicodeObfuscator.SYMBOL_SUFFIX.length)
+                }
+            }
+
+            val emoStart = source.indexOf(UnicodeObfuscator.EMOJI_PREFIX)
+            if (emoStart != -1) {
+                val emoEnd = source.indexOf(
+                    UnicodeObfuscator.EMOJI_SUFFIX,
+                    emoStart + UnicodeObfuscator.EMOJI_PREFIX.length
+                )
+                if (emoEnd != -1) {
+                    return source.substring(emoStart, emoEnd + UnicodeObfuscator.EMOJI_SUFFIX.length)
+                }
             }
         }
-
-        // Find standard emoji boundaries in the original text
-        val emoStart = text.indexOf(UnicodeObfuscator.EMOJI_PREFIX)
-        if (emoStart != -1) {
-            val emoEnd = text.indexOf(UnicodeObfuscator.EMOJI_SUFFIX, emoStart + UnicodeObfuscator.EMOJI_PREFIX.length)
-            if (emoEnd != -1) {
-                return text.substring(emoStart, emoEnd + UnicodeObfuscator.EMOJI_SUFFIX.length)
-            }
-        }
-
         return null
+    }
+
+    private fun normalizeForDetection(text: String): String {
+        return InvisibleCharInjector.remove(
+            text
+                .replace("\u200e", "")
+                .replace("\u200f", "")
+                .replace("\u202a", "")
+                .replace("\u202c", "")
+        ).trim()
     }
 
     /**

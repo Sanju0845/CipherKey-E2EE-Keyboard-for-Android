@@ -6,37 +6,36 @@ object SymbolMapper {
         "⟟", "☍", "∆", "☄", "༒", "⌘", "⇢", "⊕", "⌿", "⍓", "⚙", "✦", "☯", "🔱", "❖", "⧓"
     )
 
-    // 16 aesthetic emojis
+    // 16 aesthetic emojis (no variation selectors — WhatsApp may strip FE0F)
     val EMOJIS = listOf(
-        "🌙", "✨", "☄️", "🫧", "⚡", "🪐", "🔮", "🧿", "🧬", "🖤", "🌌", "🚀", "👾", "📡", "🛡️", "🔑"
+        "🌙", "✨", "☄", "🫧", "⚡", "🪐", "🔮", "🧿", "🧬", "🖤", "🌌", "🚀", "👾", "📡", "🛡", "🔑"
     )
 
     val SYMBOL_STRINGS = SYMBOLS
     val EMOJI_STRINGS = EMOJIS
 
+    fun normalizeVisualChar(text: String): String {
+        return text
+            .replace("\uFE0F", "")
+            .replace("\u200B", "")
+            .replace("\u200C", "")
+            .replace("\u200D", "")
+            .replace("\u2060", "")
+    }
+
     /**
      * Inspects the cleaned text to detect if it's formatted in symbols vs emoji mode.
      */
     fun detectMode(cleanedText: String): Boolean {
-        val symbolCount = SYMBOL_STRINGS.count { cleanedText.contains(it) }
-        val emojiCount = EMOJI_STRINGS.count { cleanedText.contains(it) }
+        val normalized = normalizeVisualChar(cleanedText)
+        val symbolCount = SYMBOL_STRINGS.count { normalized.contains(normalizeVisualChar(it)) }
+        val emojiCount = EMOJI_STRINGS.count { normalized.contains(normalizeVisualChar(it)) }
         return symbolCount >= emojiCount
     }
 
-    /**
-     * Map a hex string (0-9, a-f) to visual symbols or emojis with a rotation shift index.
-     * @param hexString The hexadecimal representation of the cipher data (e.g. "a5f3").
-     * @param useSymbols Mode toggle (true for futuristic symbols, false for emojis).
-     * @param rotation Shift value between 0 and 15 to rotate the mapping table.
-     */
     fun mapToVisual(hexString: String, useSymbols: Boolean, rotation: Int): String {
         val pool = if (useSymbols) SYMBOL_STRINGS else EMOJI_STRINGS
-        val rotatedPool = ArrayList<String>(16)
-        val r = rotation % 16
-        // Rotate pool
-        for (i in 0 until 16) {
-            rotatedPool.add(pool[(i + r) % 16])
-        }
+        val rotatedPool = buildRotatedPool(pool, rotation)
 
         val result = StringBuilder()
         for (char in hexString) {
@@ -49,23 +48,58 @@ object SymbolMapper {
     }
 
     /**
-     * Map visual symbols or emojis back to a hex string using the specified rotation.
+     * Strict decode: fails if any character cannot be mapped (avoids silent corruption).
      */
-    fun mapFromVisual(visualString: String, useSymbols: Boolean, rotation: Int): String {
-        val pool = if (useSymbols) SYMBOL_STRINGS else EMOJI_STRINGS
-        val rotatedPool = ArrayList<String>(16)
-        val r = rotation % 16
-        for (i in 0 until 16) {
-            rotatedPool.add(pool[(i + r) % 16])
-        }
+    fun mapFromVisualStrict(visualString: String, useSymbols: Boolean, rotation: Int): String? {
+        val normalized = normalizeVisualChar(visualString)
+        val rotatedPool = buildRotatedPool(
+            if (useSymbols) SYMBOL_STRINGS else EMOJI_STRINGS,
+            rotation
+        )
+        val matchOrder = (0 until 16)
+            .map { digit -> digit to normalizeVisualChar(rotatedPool[digit]) }
+            .sortedByDescending { it.second.length }
 
         val result = StringBuilder()
         var i = 0
-        while (i < visualString.length) {
+        while (i < normalized.length) {
+            if (normalized[i].isWhitespace()) {
+                i++
+                continue
+            }
             var matched = false
-            for (digit in 0..15) {
-                val symbol = rotatedPool[digit]
-                if (visualString.startsWith(symbol, i)) {
+            for ((digit, symbol) in matchOrder) {
+                if (symbol.isNotEmpty() && normalized.startsWith(symbol, i)) {
+                    result.append(Integer.toHexString(digit))
+                    i += symbol.length
+                    matched = true
+                    break
+                }
+            }
+            if (!matched) return null
+        }
+        return result.toString()
+    }
+
+    /**
+     * Lenient decode: skips unknown characters (legacy / heavily damaged payloads).
+     */
+    fun mapFromVisual(visualString: String, useSymbols: Boolean, rotation: Int): String {
+        val normalized = normalizeVisualChar(visualString)
+        val rotatedPool = buildRotatedPool(
+            if (useSymbols) SYMBOL_STRINGS else EMOJI_STRINGS,
+            rotation
+        )
+        val matchOrder = (0 until 16)
+            .map { digit -> digit to normalizeVisualChar(rotatedPool[digit]) }
+            .sortedByDescending { it.second.length }
+
+        val result = StringBuilder()
+        var i = 0
+        while (i < normalized.length) {
+            var matched = false
+            for ((digit, symbol) in matchOrder) {
+                if (symbol.isNotEmpty() && normalized.startsWith(symbol, i)) {
                     result.append(Integer.toHexString(digit))
                     i += symbol.length
                     matched = true
@@ -73,9 +107,19 @@ object SymbolMapper {
                 }
             }
             if (!matched) {
-                i++ // Skip characters that do not match the key symbols (noise defense)
+                i++
             }
         }
         return result.toString()
+    }
+
+    fun rotationPrefixSymbol(rotation: Int, useSymbols: Boolean): String {
+        val rotationHex = Integer.toHexString(rotation % 16)
+        return normalizeVisualChar(mapToVisual(rotationHex, useSymbols, 0))
+    }
+
+    private fun buildRotatedPool(pool: List<String>, rotation: Int): List<String> {
+        val r = rotation % 16
+        return List(16) { i -> pool[(i + r) % 16] }
     }
 }

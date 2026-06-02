@@ -3,86 +3,71 @@ package com.example.cipher
 import kotlin.random.Random
 
 object UnicodeObfuscator {
-    // Futuristic symbols markers
     const val SYMBOL_PREFIX = "꧁"
     const val SYMBOL_SUFFIX = "꧂"
-
-    // Aesthetic emoji markers
     const val EMOJI_PREFIX = "🌌✨"
     const val EMOJI_SUFFIX = "✨🌌"
 
-    /**
-     * Converts a hexadecimal string into an obfuscated visual string.
-     * Incorporates dynamic rotation shifting and random zero-width insertion.
-     */
     fun obfuscate(hexString: String, useSymbols: Boolean): String {
-        // Pick a random rotation shift between 0 and 15
         val rotation = Random.nextInt(16)
-        
-        // Encode rotation digit as a hex character
-        val rotationHex = Integer.toHexString(rotation)
-        
-        // Map the rotation digit using a FIXED rotation of 0 so it's readable by the decoder.
-        val prefixCharVisual = SymbolMapper.mapToVisual(rotationHex, useSymbols, 0)
-        
-        // Map the payload using the randomized rotation
+        val prefixCharVisual = SymbolMapper.rotationPrefixSymbol(rotation, useSymbols)
         val bodyVisual = SymbolMapper.mapToVisual(hexString, useSymbols, rotation)
-        
-        val rawVisual = if (useSymbols) {
+
+        return if (useSymbols) {
             SYMBOL_PREFIX + prefixCharVisual + bodyVisual + SYMBOL_SUFFIX
         } else {
             EMOJI_PREFIX + prefixCharVisual + bodyVisual + EMOJI_SUFFIX
         }
-
-        // Sprinkle invisible entropy
-        return InvisibleCharInjector.inject(rawVisual)
     }
 
-    /**
-     * Reverses visual obfuscation to restore the original hex string.
-     * Extracts mode automatically based on symbol concentrations.
-     */
     fun deobfuscate(obfuscatedText: String): String? {
-        // 1. Remove invisible characters first
-        val cleaned = InvisibleCharInjector.remove(obfuscatedText).trim()
+        return deobfuscateCandidates(obfuscatedText).firstOrNull()
+    }
 
-        // 2. Identify the wrapping mode and strip standard wrappers
-        val useSymbols = SymbolMapper.detectMode(cleaned)
-        val stripped = if (useSymbols) {
-            if (cleaned.startsWith(SYMBOL_PREFIX) && cleaned.endsWith(SYMBOL_SUFFIX)) {
-                cleaned.substring(SYMBOL_PREFIX.length, cleaned.length - SYMBOL_SUFFIX.length)
-            } else {
-                return null
-            }
-        } else {
-            if (cleaned.startsWith(EMOJI_PREFIX) && cleaned.endsWith(EMOJI_SUFFIX)) {
-                cleaned.substring(EMOJI_PREFIX.length, cleaned.length - EMOJI_SUFFIX.length)
-            } else {
-                return null
-            }
+    fun deobfuscateCandidates(obfuscatedText: String): List<String> {
+        val cleaned = SymbolMapper.normalizeVisualChar(
+            InvisibleCharInjector.remove(obfuscatedText).trim()
+        )
+        if (cleaned.isEmpty()) return emptyList()
+
+        val results = LinkedHashSet<String>()
+        for (useSymbols in listOf(true, false)) {
+            decodeFromCleaned(cleaned, useSymbols)?.let { results.add(it) }
         }
+        return results.toList()
+    }
 
+    private fun decodeFromCleaned(cleaned: String, useSymbols: Boolean): String? {
+        val stripped = stripWrappers(cleaned, useSymbols) ?: return null
         if (stripped.isEmpty()) return null
 
-        // 3. Extract the rotation digit symbol (the very first symbol)
-        val pool = if (useSymbols) SymbolMapper.SYMBOL_STRINGS else SymbolMapper.EMOJI_STRINGS
-        var rotationHexSymbol = ""
-        var rotationDigit = -1
-        for (digit in 0..15) {
-            val symbol = pool[digit]
-            if (stripped.startsWith(symbol)) {
-                rotationHexSymbol = symbol
-                rotationDigit = digit
-                break
-            }
+        for (rotation in 0 until 16) {
+            val prefix = SymbolMapper.rotationPrefixSymbol(rotation, useSymbols)
+            if (!stripped.startsWith(prefix)) continue
+            val body = stripped.substring(prefix.length)
+            val strict = SymbolMapper.mapFromVisualStrict(body, useSymbols, rotation)
+            if (strict != null && isValidHex(strict)) return strict
         }
+        return null
+    }
 
-        if (rotationDigit == -1 || rotationHexSymbol.isEmpty()) return null
+    private fun stripWrappers(cleaned: String, useSymbols: Boolean): String? {
+        return if (useSymbols) {
+            if (!cleaned.contains(SYMBOL_PREFIX) || !cleaned.contains(SYMBOL_SUFFIX)) return null
+            val start = cleaned.indexOf(SYMBOL_PREFIX)
+            val end = cleaned.indexOf(SYMBOL_SUFFIX, start + SYMBOL_PREFIX.length)
+            if (end == -1) return null
+            cleaned.substring(start + SYMBOL_PREFIX.length, end)
+        } else {
+            if (!cleaned.contains(EMOJI_PREFIX) || !cleaned.contains(EMOJI_SUFFIX)) return null
+            val start = cleaned.indexOf(EMOJI_PREFIX)
+            val end = cleaned.indexOf(EMOJI_SUFFIX, start + EMOJI_PREFIX.length)
+            if (end == -1) return null
+            cleaned.substring(start + EMOJI_PREFIX.length, end)
+        }
+    }
 
-        val rotation = rotationDigit
-        val bodyVisual = stripped.substring(rotationHexSymbol.length)
-
-        // 4. Trace the body back to hex using the decoded shift key
-        return SymbolMapper.mapFromVisual(bodyVisual, useSymbols, rotation)
+    private fun isValidHex(hex: String): Boolean {
+        return hex.isNotEmpty() && hex.length % 2 == 0 && hex.all { Character.digit(it, 16) >= 0 }
     }
 }

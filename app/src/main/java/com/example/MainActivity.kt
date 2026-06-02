@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.cipher.CipherEngine
+import com.example.cipher.CipherPrefs
+import com.example.quick.QuickBubbleService
+import com.example.quick.QuickTranslateActivity
 import com.example.ui.theme.*
 
 class MainActivity : ComponentActivity() {
@@ -81,7 +84,8 @@ fun OnboardingScreen(modifier: Modifier = Modifier) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 try {
-                    passphrase = CipherEngine.getStoredPassphrase(context)
+                    val stored = CipherEngine.getStoredPassphrase(context)
+                    passphrase = if (stored == CipherEngine.DEFAULT_PASSPHRASE) "" else stored
                     isEnabled = isKeyboardEnabled(context)
                     isSelected = isKeyboardSelected(context)
                 } catch (e: Exception) {
@@ -131,6 +135,8 @@ fun OnboardingScreen(modifier: Modifier = Modifier) {
                 lineHeight = 18.sp
             )
         }
+
+        QuickChatCard(context = context)
 
         // Horizontal status warning pill
         Surface(
@@ -233,10 +239,7 @@ fun OnboardingScreen(modifier: Modifier = Modifier) {
 
                 OutlinedTextField(
                     value = passphrase,
-                    onValueChange = {
-                        passphrase = it
-                        CipherEngine.setStoredPassphrase(context, it)
-                    },
+                    onValueChange = { passphrase = it },
                     label = { Text("Subgroup Passphrase", color = Slate400) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -253,10 +256,26 @@ fun OnboardingScreen(modifier: Modifier = Modifier) {
                 )
                 
                 Text(
-                    text = if (passphrase.isEmpty()) "Using default public key." else "Secured under personalized passphrase.",
+                    text = when {
+                        CipherEngine.isUsingDefaultPassphrase(context) ->
+                            "Using default shared key (same on all fresh installs)."
+                        else -> "Custom passphrase active — must match on every device."
+                    },
                     fontSize = 11.sp,
-                    color = if (passphrase.isEmpty()) Slate500 else ImmersiveCyan
+                    color = if (CipherEngine.isUsingDefaultPassphrase(context)) Slate500 else ImmersiveCyan
                 )
+
+                Button(
+                    onClick = {
+                        CipherEngine.setStoredPassphrase(context, passphrase)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ImmersiveCyan, contentColor = Color.Black),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("btn_save_passphrase")
+                ) {
+                    Text("Save passphrase", fontWeight = FontWeight.Bold)
+                }
             }
         }
 
@@ -425,6 +444,77 @@ fun OnboardingScreen(modifier: Modifier = Modifier) {
                                 .testTag("playground_decrypted_output")
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QuickChatCard(context: Context) {
+    var bubbleOn by remember { mutableStateOf(CipherPrefs.isBubbleEnabled(context)) }
+
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = ImmersiveCardBg),
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(4.dp, RoundedCornerShape(12.dp))
+            .testTag("quick_chat_card")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "⚡ Rapid chat mode",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = ImmersiveCyan
+            )
+            Text(
+                text = "Copy → ENC/DEC → paste. No Lock mode needed. Use Symbols on both phones.",
+                fontSize = 12.sp,
+                color = Slate400,
+                lineHeight = 16.sp
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { QuickTranslateActivity.launch(context) },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = ImmersiveIndigo)
+                ) {
+                    Text("Translator", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+                Button(
+                    onClick = {
+                        if (!Settings.canDrawOverlays(context)) {
+                            QuickBubbleService.requestOverlayPermission(context)
+                            return@Button
+                        }
+                        if (bubbleOn) {
+                            QuickBubbleService.stop(context)
+                            CipherPrefs.setBubbleEnabled(context, false)
+                            bubbleOn = false
+                        } else {
+                            QuickBubbleService.start(context)
+                            bubbleOn = true
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (bubbleOn) ImmersiveCyan else Slate700,
+                        contentColor = if (bubbleOn) Color.Black else Color.White
+                    )
+                ) {
+                    Text(
+                        if (bubbleOn) "Bubble ON" else "Bubble",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
                 }
             }
         }

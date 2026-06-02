@@ -5,27 +5,31 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.Slate100
+import com.example.ui.theme.Slate500
 import com.example.ui.theme.Slate700
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val KeyShape = RoundedCornerShape(8.dp)
 private val KeyHeight = 44.dp
@@ -76,9 +80,7 @@ fun StandardKey(
                             onClick()
                         }
                     )
-                } else {
-                    Modifier
-                }
+                } else Modifier
             )
             .testTag("key_$label"),
         contentAlignment = Alignment.Center
@@ -88,6 +90,73 @@ fun StandardKey(
             color = textColor,
             fontSize = if (label.length > 2) 11.sp else 17.sp,
             fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+/**
+ * Backspace key with:
+ *  - Single tap  → delete one char (or the current selection if any)
+ *  - Long press  → repeatedly delete word-by-word every 300ms while held
+ */
+@Composable
+fun BackspaceKey(
+    modifier: Modifier = Modifier,
+    onBackspace: () -> Unit,
+    onDeleteWord: () -> Unit
+) {
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+    var isLongPressing by remember { mutableStateOf(false) }
+    var pressed by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.94f else 1f,
+        animationSpec = tween(70),
+        label = "backspaceScale"
+    )
+
+    Box(
+        modifier = modifier
+            .height(KeyHeight)
+            .scale(scale)
+            .clip(KeyShape)
+            .background(Slate700.copy(alpha = 0.55f), KeyShape)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = { _ ->
+                        pressed = true
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        // Start long-press timer
+                        val job = scope.launch {
+                            delay(400) // initial delay before repeat starts
+                            isLongPressing = true
+                            while (isLongPressing) {
+                                onDeleteWord()
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                delay(150) // repeat interval
+                            }
+                        }
+                        tryAwaitRelease()
+                        pressed = false
+                        if (isLongPressing) {
+                            isLongPressing = false
+                            job.cancel()
+                        } else {
+                            job.cancel()
+                            onBackspace() // normal single tap
+                        }
+                    }
+                )
+            }
+            .testTag("key_backspace"),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "⌫",
+            color = Slate100,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold
         )
     }
 }
@@ -135,6 +204,87 @@ fun SpecialKey(
             color = textColor,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+/**
+ * Key that shows a small number hint in the top-right corner.
+ * Tap = letter, long press = number.
+ */
+@Composable
+fun LongPressKey(
+    label: String,
+    longPressLabel: String,
+    modifier: Modifier = Modifier,
+    glideHighlight: Boolean = false,
+    onTap: () -> Unit,
+    onLongPress: () -> Unit
+) {
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+    var pressed by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = when {
+            glideHighlight -> 1.05f
+            pressed -> 0.94f
+            else -> 1f
+        },
+        animationSpec = tween(70),
+        label = "lpKeyScale"
+    )
+
+    val bg = if (glideHighlight || pressed) Color(0xFF3D4654) else Color(0xFF2A3038)
+
+    Box(
+        modifier = modifier
+            .height(44.dp)
+            .scale(scale)
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg, RoundedCornerShape(8.dp))
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = { _ ->
+                        pressed = true
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        val job = scope.launch {
+                            delay(350)
+                            // Long press triggered
+                            pressed = false
+                            onLongPress()
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        }
+                        val released = tryAwaitRelease()
+                        pressed = false
+                        if (released && job.isActive) {
+                            job.cancel()
+                            onTap()
+                        } else {
+                            job.cancel()
+                        }
+                    }
+                )
+            }
+            .testTag("key_lp_$label"),
+        contentAlignment = Alignment.Center
+    ) {
+        // Main letter
+        androidx.compose.material3.Text(
+            text = label,
+            color = Slate100,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Medium
+        )
+        // Small number hint top-right
+        androidx.compose.material3.Text(
+            text = longPressLabel,
+            color = Slate500,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Normal,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 3.dp, end = 4.dp)
         )
     }
 }
