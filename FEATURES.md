@@ -1,6 +1,6 @@
 # CipherKey — Features & Architecture
 
-> Latest: Version 1.2.2
+> Latest: Version 1.2.3
 
 ---
 
@@ -13,6 +13,11 @@ Messages are encrypted *before* they leave your keyboard, meaning no app, server
 ---
 
 ## Changelog
+
+### v1.2.3 — Long Press Space → Keyboard Switcher
+- Long press the **spacebar** → opens Android's built-in keyboard picker instantly
+- Switch between CipherKey ↔ Gboard ↔ SwiftKey without leaving the current app
+- Small ⌨ hint visible in the top-right corner of the space key
 
 ### v1.2.2 — Cover Profiles (Disguise Messages)
 - Encrypted messages can now be disguised as normal-looking text

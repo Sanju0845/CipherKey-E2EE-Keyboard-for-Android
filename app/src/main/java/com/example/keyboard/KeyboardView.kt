@@ -37,6 +37,7 @@ fun KeyboardView(
     onToggleCipher: () -> Unit,
     onLongPressCipher: () -> Unit = {},
     coverProfileEmoji: String = "✦",
+    onSwitchKeyboard: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Shift state: OFF / ONE_SHOT / CAPS_LOCK
@@ -219,11 +220,12 @@ fun KeyboardView(
                 onTap = onToggleCipher,
                 onLongPress = onLongPressCipher
             )
-            StandardKey(
+            LongPressKey(
                 label = "space",
+                longPressLabel = "⌨",
                 modifier = Modifier.weight(3.5f),
-                bgColor = if (isCipherModeOn) Slate700 else Slate800,
-                onClick = onSpace
+                onTap = onSpace,
+                onLongPress = onSwitchKeyboard
             )
             StandardKey(
                 label = ".",

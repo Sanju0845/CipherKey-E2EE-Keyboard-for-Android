@@ -175,6 +175,11 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                     onToggleCipher = { isCipherModeOn = !isCipherModeOn },
                     onLongPressCipher = { showProfilePicker = !showProfilePicker },
                     coverProfileEmoji = coverProfile.emoji,
+                    onSwitchKeyboard = {
+                        val imm = getSystemService(Context.INPUT_METHOD_SERVICE)
+                            as android.view.inputmethod.InputMethodManager
+                        imm.showInputMethodPicker()
+                    },
                     modifier = Modifier
                         .onGloballyPositioned { coords ->
                             if (coords.size.height > 0) keyboardHeightPx = coords.size.height
