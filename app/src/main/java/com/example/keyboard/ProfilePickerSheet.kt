@@ -94,8 +94,7 @@ private fun ProfileChip(
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = androidx.compose.foundation.LocalIndication.current
-                ),
+                indication = androidx.compose.foundation.LocalIndication.current,
                 onClick = onClick
             )
             .padding(horizontal = 12.dp),

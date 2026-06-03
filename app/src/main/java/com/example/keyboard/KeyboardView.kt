@@ -240,12 +240,15 @@ fun KeyboardView(
                 textColor = Color.White,
                 onClick = onEnter
             )
+        }
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shift key — shows ⇧ (off), filled ⇧ (one-shot), ⇪ (caps lock)
+// Shift key
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-private fun ShiftKey(
+fun ShiftKey(
     shiftState: ShiftState,
     modifier: Modifier = Modifier,
     onTap: () -> Unit
@@ -271,7 +274,7 @@ private fun ShiftKey(
 // Top row with long-press numbers
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-private fun NumberLongPressRow(
+fun NumberLongPressRow(
     letters: List<String>,
     numbers: List<String>,
     isUpper: Boolean,
@@ -313,7 +316,7 @@ private fun NumberLongPressRow(
 // Glide letter row (rows 2 and 3)
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-private fun GlideLetterRow(
+fun GlideLetterRow(
     keys: List<String>,
     isUpper: Boolean,
     glideEnabled: Boolean,
@@ -351,7 +354,7 @@ private fun GlideLetterRow(
 }
 
 @Composable
-private fun StaticKeyRow(
+fun StaticKeyRow(
     keys: List<String>,
     onKeyPress: (String) -> Unit,
     rowPaddingStart: Dp = 4.dp,

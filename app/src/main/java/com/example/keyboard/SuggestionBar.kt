@@ -123,8 +123,7 @@ fun KeyboardStrip(
                 .background(iconBg)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = androidx.compose.foundation.LocalIndication.current
-                    ),
+                    indication = androidx.compose.foundation.LocalIndication.current,
                     onClick = onOpenClipboard
                 ),
             contentAlignment = Alignment.Center
@@ -150,8 +149,7 @@ private fun WordChip(
             .fillMaxHeight()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = androidx.compose.foundation.LocalIndication.current
-                ),
+                indication = androidx.compose.foundation.LocalIndication.current,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center
