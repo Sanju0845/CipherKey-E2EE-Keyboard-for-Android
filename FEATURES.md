@@ -1,6 +1,6 @@
 # CipherKey — Features & Architecture
 
-> Latest: Version 1.2.4
+> Latest: Version 1.3.0
 
 ---
 

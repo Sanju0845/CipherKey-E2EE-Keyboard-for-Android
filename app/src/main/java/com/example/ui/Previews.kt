@@ -46,6 +46,7 @@ fun Preview_KeyboardStrip_Normal() {
             isCipherModeOn = false,
             composingDraft = "",
             showClipboard = false,
+            activePanel = ActivePanel.KEYBOARD,
             onToggleCipherMode = {},
             onOpenClipboard = {}
         )
@@ -62,6 +63,7 @@ fun Preview_KeyboardStrip_CipherMode() {
             isCipherModeOn = true,
             composingDraft = "hello there",
             showClipboard = false,
+            activePanel = ActivePanel.KEYBOARD,
             onToggleCipherMode = {},
             onOpenClipboard = {}
         )

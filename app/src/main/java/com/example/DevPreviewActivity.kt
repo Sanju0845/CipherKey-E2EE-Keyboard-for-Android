@@ -48,6 +48,7 @@ fun DevPreviewContent() {
             isCipherModeOn = isCipherModeOn,
             composingDraft = composingDraft,
             showClipboard = false,
+            activePanel = ActivePanel.KEYBOARD,
             onToggleCipherMode = { isCipherModeOn = !isCipherModeOn },
             onOpenClipboard = {}
         )

@@ -25,6 +25,7 @@ fun KeyboardStrip(
     isCipherModeOn: Boolean,
     composingDraft: String,
     showClipboard: Boolean,
+    activePanel: ActivePanel = ActivePanel.KEYBOARD,
     onToggleCipherMode: () -> Unit,
     onOpenClipboard: () -> Unit,
     modifier: Modifier = Modifier
@@ -79,30 +80,38 @@ fun KeyboardStrip(
             }
         }
 
-        // ── Right: toggle icon button ─────────────────────────────────────────
-        // Shows clipboard icon (⊞) when keyboard is active → tap to open clipboard
-        // Shows keyboard icon (⌨) when clipboard is active → tap to go back
+        // ── Right: ↓ arrow opens panel selector ──────────────────────────────
         Box(
             modifier = Modifier
                 .padding(end = 4.dp)
                 .size(44.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .background(
-                    if (showClipboard) ImmersiveCyan.copy(alpha = 0.15f)
-                    else Color(0xFF1E2530)
+                    when (activePanel) {
+                        ActivePanel.AI -> ImmersiveCyan.copy(alpha = 0.15f)
+                        ActivePanel.CLIPBOARD -> ImmersiveIndigo.copy(alpha = 0.15f)
+                        else -> Color(0xFF1E2530)
+                    }
                 )
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = androidx.compose.foundation.LocalIndication.current,
-                    onClick = onOpenClipboard
+                    onClick = onOpenClipboard  // onOpenClipboard now opens the panel selector
                 ),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                // ⌨ = keyboard symbol, ❑ = clipboard-like symbol
-                text = if (showClipboard) "⌨" else "❑",
-                color = if (showClipboard) ImmersiveCyan else Slate300,
-                fontSize = 17.sp,
+                text = when (activePanel) {
+                    ActivePanel.AI -> "✦"
+                    ActivePanel.CLIPBOARD -> "📋"
+                    else -> "↓"
+                },
+                color = when (activePanel) {
+                    ActivePanel.AI -> ImmersiveCyan
+                    ActivePanel.CLIPBOARD -> ImmersiveIndigoLight
+                    else -> Slate300
+                },
+                fontSize = if (activePanel == ActivePanel.KEYBOARD) 19.sp else 17.sp,
                 fontWeight = FontWeight.Normal
             )
         }
