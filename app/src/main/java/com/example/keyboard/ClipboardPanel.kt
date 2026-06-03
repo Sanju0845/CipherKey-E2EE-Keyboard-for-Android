@@ -68,7 +68,7 @@ fun ClipboardPanel(
             text = "Tap to paste  ·  Tap 🔒 to encrypt  ·  Tap 🔓 to preview decrypted",
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             color = Slate600,
-            fontSize = 10.sp
+            fontSize = 11.sp
         )
 
         if (entries.isEmpty()) {
@@ -131,7 +131,7 @@ private fun ClipCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
+                .heightIn(min = 56.dp)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = androidx.compose.foundation.LocalIndication.current,
@@ -207,7 +207,7 @@ private fun ClipCard(
                             if (decryptedPreview != null) "hide" else "read"
                         } else "encrypt",
                         color = if (entry.isCipher) ImmersiveCyan else ImmersiveIndigoLight,
-                        fontSize = 8.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }

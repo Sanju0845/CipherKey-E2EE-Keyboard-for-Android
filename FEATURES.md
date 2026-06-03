@@ -1,6 +1,6 @@
 # CipherKey — Features & Architecture
 
-> Latest: Version 1.2.3
+> Latest: Version 1.2.4
 
 ---
 
@@ -13,6 +13,23 @@ Messages are encrypted *before* they leave your keyboard, meaning no app, server
 ---
 
 ## Changelog
+
+### v1.2.4 — Premium Microinteractions & UI Polish
+- Key height increased to 48dp, corner radius 10dp — more touch-friendly
+- Key press animation: popup spring effect (keys grow on tap, snap back)
+- Suggestion strip height 48dp — matches Material 3 standards
+- Active cipher lock shows cyan glow background
+- Clipboard/keyboard toggle icon touch target increased to 44dp
+- Fixed clipboard card min-height (wraps content, no clipping)
+- Fixed clipboard item label font sizes (10sp min)
+- Fixed hint text font sizes (11sp min)
+- Fixed profile picker selected border (real 1.5dp cyan border)
+- Fixed alpha-invisible keyboard receiving touch events (absorbed by empty pointerInput)
+- Removed dot key from bottom row — spacebar weight 4.5f, much wider
+- AMOLED + glassmorphism color tokens added to theme
+- Consolidated hardcoded hex colors into Color.kt semantic tokens
+- "CipherKey · type to get suggestions" placeholder in strip
+- Spring-based animations on all keys (natural bounce physics)
 
 ### v1.2.3 — Long Press Space → Keyboard Switcher
 - Long press the **spacebar** → opens Android's built-in keyboard picker instantly

@@ -212,26 +212,23 @@ fun KeyboardView(
                     }
                 }
             )
-            // Cipher toggle key — shows profile emoji, long press opens picker
+            // Cipher toggle key — glow when active
             LongPressKey(
                 label = if (isCipherModeOn) "🔒" else "🔓",
                 longPressLabel = coverProfileEmoji,
                 modifier = Modifier.weight(1.5f),
+                bgColor = if (isCipherModeOn) ImmersiveCyan else Slate700.copy(alpha = 0.55f),
+                textColor = if (isCipherModeOn) Color.Black else Slate100,
                 onTap = onToggleCipher,
                 onLongPress = onLongPressCipher
             )
             LongPressKey(
                 label = "space",
                 longPressLabel = "⌨",
-                modifier = Modifier.weight(3.5f),
+                modifier = Modifier.weight(4.5f),
+                bgColor = if (isCipherModeOn) Slate700 else Slate800,
                 onTap = onSpace,
                 onLongPress = onSwitchKeyboard
-            )
-            StandardKey(
-                label = ".",
-                modifier = Modifier.weight(1f),
-                bgColor = Slate700.copy(alpha = 0.55f),
-                onClick = { onKeyPress(".") }
             )
             SpecialKey(
                 label = "↩",

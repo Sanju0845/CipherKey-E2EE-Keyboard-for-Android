@@ -32,8 +32,8 @@ fun KeyboardStrip(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(40.dp)
-            .background(Color(0xFF13161A)),
+            .height(48.dp)
+            .background(StripBg),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // ── Left: suggestions or cipher draft ────────────────────────────────
@@ -45,7 +45,7 @@ fun KeyboardStrip(
                     .weight(1f)
                     .padding(horizontal = 12.dp),
                 color = if (composingDraft.isNotEmpty()) ImmersiveCyan else Slate500,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -69,7 +69,7 @@ fun KeyboardStrip(
                 }
             } else {
                 Text(
-                    "CipherKey",
+                    "CipherKey · type to get suggestions",
                     modifier = Modifier
                         .weight(1f)
                         .padding(start = 12.dp),
@@ -84,9 +84,9 @@ fun KeyboardStrip(
         // Shows keyboard icon (⌨) when clipboard is active → tap to go back
         Box(
             modifier = Modifier
-                .padding(end = 8.dp)
-                .size(32.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .padding(end = 4.dp)
+                .size(44.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(
                     if (showClipboard) ImmersiveCyan.copy(alpha = 0.15f)
                     else Color(0xFF1E2530)

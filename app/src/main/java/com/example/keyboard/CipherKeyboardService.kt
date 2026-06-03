@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -185,6 +186,10 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                             if (coords.size.height > 0) keyboardHeightPx = coords.size.height
                         }
                         .alpha(if (showClipboard) 0f else 1f)
+                        .then(
+                            // Absorb all touches when invisible so clipboard can be tapped
+                            if (showClipboard) Modifier.pointerInput(Unit) {} else Modifier
+                        )
                 )
 
                 // Clipboard — overlaid at the same height, crossfades in/out

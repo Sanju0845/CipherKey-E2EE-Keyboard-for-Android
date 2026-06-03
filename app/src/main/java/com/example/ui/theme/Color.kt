@@ -27,8 +27,25 @@ val Slate700 = Color(0xFF334155)
 val Slate800 = Color(0xFF1E293B)
 
 // Keyboard-specific (CipherKey mockup)
-val KeyboardKeyBg = Color(0xFF2B3139)
+val KeyboardKeyBg = Color(0xFF252C36)
 val KeyboardPanelBg = Color(0xFF1A1D24)
 val KeyboardPanelBorder = Color(0xFF2E3640)
 val EnterPurple = Color(0xFFA89BF6)
 val EnterPurpleIcon = Color(0xFF4338CA)
+
+// AMOLED mode
+val AmoledBlack = Color(0xFF000000)
+val AmoledSurface = Color(0xFF0A0A0A)
+val AmoledCard = Color(0xFF111111)
+
+// Glassmorphism
+val GlassWhite = Color(0x14FFFFFF)
+val GlassBorder = Color(0x1FFFFFFF)
+val GlassCyan = Color(0x2022D3EE)
+
+// Semantic panel colors (consolidated)
+val PanelBg = Color(0xFF0D1014)
+val PanelCard = Color(0xFF1A1E24)
+val PanelHeader = Color(0xFF111418)
+val PanelDecryptBg = Color(0xFF111520)
+val StripBg = Color(0xFF13161A)

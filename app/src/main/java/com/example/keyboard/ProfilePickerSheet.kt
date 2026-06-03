@@ -1,6 +1,7 @@
 package com.example.keyboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -80,7 +81,8 @@ private fun ProfileChip(
             .clip(RoundedCornerShape(8.dp))
             .background(bg)
             .then(
-                if (isSelected) Modifier.padding(1.dp) else Modifier
+                if (isSelected) Modifier.border(1.5.dp, ImmersiveCyan, RoundedCornerShape(8.dp))
+                else Modifier
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
