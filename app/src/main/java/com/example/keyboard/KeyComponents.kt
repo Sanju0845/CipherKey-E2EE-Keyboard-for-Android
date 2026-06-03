@@ -97,8 +97,7 @@ fun StandardKey(
                     if (onClick != null) {
                         Modifier.clickable(
                             interactionSource = interactionSource,
-                            indication = androidx.compose.foundation.LocalIndication.current
-                            ),
+                            indication = androidx.compose.foundation.LocalIndication.current,
                             onClick = {
                                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                                 onClick()
@@ -208,8 +207,7 @@ fun SpecialKey(
             .background(if (pressed) pressedBgColor else bgColor, KeyShape)
             .clickable(
                 interactionSource = interactionSource,
-                indication = androidx.compose.foundation.LocalIndication.current
-                ),
+                indication = androidx.compose.foundation.LocalIndication.current,
                 onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     onClick()

@@ -143,8 +143,7 @@ private fun ClipCard(
                 .heightIn(min = 56.dp)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = androidx.compose.foundation.LocalIndication.current
-                    ),
+                    indication = androidx.compose.foundation.LocalIndication.current,
                     onClick = onPasteRaw
                 ),
             verticalAlignment = Alignment.CenterVertically
