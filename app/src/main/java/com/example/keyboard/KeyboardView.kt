@@ -35,6 +35,8 @@ fun KeyboardView(
     onSpace: () -> Unit,
     onEnter: () -> Unit,
     onToggleCipher: () -> Unit,
+    onLongPressCipher: () -> Unit = {},
+    coverProfileEmoji: String = "✦",
     modifier: Modifier = Modifier
 ) {
     // Shift state: OFF / ONE_SHOT / CAPS_LOCK
@@ -209,12 +211,13 @@ fun KeyboardView(
                     }
                 }
             )
-            SpecialKey(
+            // Cipher toggle key — shows profile emoji, long press opens picker
+            LongPressKey(
                 label = if (isCipherModeOn) "🔒" else "🔓",
+                longPressLabel = coverProfileEmoji,
                 modifier = Modifier.weight(1.5f),
-                bgColor = if (isCipherModeOn) ImmersiveCyan else Slate700.copy(alpha = 0.55f),
-                textColor = if (isCipherModeOn) Color.Black else Slate100,
-                onClick = onToggleCipher
+                onTap = onToggleCipher,
+                onLongPress = onLongPressCipher
             )
             StandardKey(
                 label = "space",

@@ -69,6 +69,10 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
     // Which panel is showing: keyboard or clipboard
     private var showClipboard by mutableStateOf(false)
 
+    // Cover profile state
+    private var coverProfile by mutableStateOf(com.example.cipher.CoverProfile.SYMBOLS)
+    private var showProfilePicker by mutableStateOf(false)
+
     // Clipboard entries shown in the panel
     private var clipboardEntries by mutableStateOf<List<ClipboardEntry>>(emptyList())
 
@@ -138,6 +142,17 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                 }
             )
 
+            // ── Profile picker (shown above keyboard when long-pressed 🔒) ────
+            if (showProfilePicker && !showClipboard) {
+                ProfilePickerSheet(
+                    currentProfile = coverProfile,
+                    onSelectProfile = { profile ->
+                        coverProfile = profile
+                        showProfilePicker = false
+                    }
+                )
+            }
+
             // ── Fixed-height container — prevents any layout jump ─────────────
             // The keyboard is always composed (invisible when clipboard shows) so
             // its height is always measured. Clipboard sits in the same Box at the
@@ -158,6 +173,8 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                     onSpace = { handleSpace() },
                     onEnter = { handleEnter() },
                     onToggleCipher = { isCipherModeOn = !isCipherModeOn },
+                    onLongPressCipher = { showProfilePicker = !showProfilePicker },
+                    coverProfileEmoji = coverProfile.emoji,
                     modifier = Modifier
                         .onGloballyPositioned { coords ->
                             if (coords.size.height > 0) keyboardHeightPx = coords.size.height
@@ -289,7 +306,7 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
         try {
             if (isCipherModeOn) {
                 if (composingDraft.isNotEmpty()) {
-                    val encrypted = CipherEngine.encrypt(applicationContext, composingDraft, useSymbols)
+                    val encrypted = CipherEngine.encrypt(applicationContext, composingDraft, useSymbols, coverProfile)
                     currentInputConnection?.commitText(encrypted, 1)
                     composingDraft = ""
                 }
@@ -307,7 +324,7 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
         try {
             if (isCipherModeOn) {
                 if (composingDraft.isNotEmpty()) {
-                    val encrypted = CipherEngine.encrypt(applicationContext, composingDraft, useSymbols)
+                    val encrypted = CipherEngine.encrypt(applicationContext, composingDraft, useSymbols, coverProfile)
                     currentInputConnection?.commitText(encrypted, 1)
                     composingDraft = ""
                 }

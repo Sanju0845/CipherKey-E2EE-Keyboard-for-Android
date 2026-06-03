@@ -12,7 +12,8 @@ object CipherDetector {
             cleaned.contains(UnicodeObfuscator.SYMBOL_SUFFIX)
         val hasEmojis = cleaned.contains(UnicodeObfuscator.EMOJI_PREFIX) &&
             cleaned.contains(UnicodeObfuscator.EMOJI_SUFFIX)
-        return hasSymbols || hasEmojis
+        val hasCover = com.example.cipher.CoverEncoder.isCoverText(text)
+        return hasSymbols || hasEmojis || hasCover
     }
 
     /**

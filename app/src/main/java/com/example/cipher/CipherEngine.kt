@@ -74,26 +74,29 @@ object CipherEngine {
 
     /**
      * AES/CBC encrypt + HMAC-SHA256 tag.
-     * Wire format: [IV 16B] + [ciphertext NB] + [HMAC tag 8B]  → hex → visual symbols
+     * Wire format: [IV 16B] + [ciphertext NB] + [HMAC tag 8B]  → hex → visual or cover text
      */
-    fun encrypt(context: Context, plainText: String, useSymbols: Boolean): String {
+    fun encrypt(context: Context, plainText: String, useSymbols: Boolean,
+                coverProfile: com.example.cipher.CoverProfile = com.example.cipher.CoverProfile.SYMBOLS): String {
         if (plainText.isEmpty()) return ""
         return try {
             val secretKey = getSecretKey(context)
-
             val iv = ByteArray(16).also { SecureRandom().nextBytes(it) }
-
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, IvParameterSpec(iv))
             val cipherBytes = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
-
-            // HMAC over (IV + ciphertext)
             val hmacTag = computeHmac(secretKey, iv + cipherBytes).copyOf(HMAC_TAG_BYTES)
-
-            // Assemble: IV | ciphertext | HMAC tag
             val payload = iv + cipherBytes + hmacTag
+            val hex = bytesToHex(payload)
 
-            UnicodeObfuscator.obfuscate(bytesToHex(payload), useSymbols)
+            when (coverProfile) {
+                com.example.cipher.CoverProfile.SYMBOLS ->
+                    UnicodeObfuscator.obfuscate(hex, true)
+                com.example.cipher.CoverProfile.EMOJIS ->
+                    UnicodeObfuscator.obfuscate(hex, false)
+                else ->
+                    com.example.cipher.CoverEncoder.encode(hex, coverProfile)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Encryption failed: ${e.message}", e)
             plainText
@@ -115,6 +118,13 @@ object CipherEngine {
      * Returns DecryptResult so callers know whether integrity passed.
      */
     fun decryptWithIntegrity(context: Context, encryptedVisualText: String): DecryptResult {
+        // Try cover profile first
+        val coverHex = com.example.cipher.CoverEncoder.extract(encryptedVisualText)
+        if (coverHex != null) {
+            return decryptHexPayloadWithIntegrity(context, coverHex)
+                ?: DecryptResult(null, false)
+        }
+
         val block = CipherDetector.extractExactVisualBlock(encryptedVisualText) ?: encryptedVisualText
         val candidates = UnicodeObfuscator.deobfuscateCandidates(block)
             .ifEmpty { listOfNotNull(UnicodeObfuscator.deobfuscate(block)) }

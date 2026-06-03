@@ -1,6 +1,6 @@
 # CipherKey — Features & Architecture
 
-> Latest: Version 1.2.1
+> Latest: Version 1.2.2
 
 ---
 
@@ -13,6 +13,21 @@ Messages are encrypted *before* they leave your keyboard, meaning no app, server
 ---
 
 ## Changelog
+
+### v1.2.2 — Cover Profiles (Disguise Messages)
+- Encrypted messages can now be disguised as normal-looking text
+- **5 cover profiles available:**
+  - ✦ **Symbols** — default cipher symbols (unchanged)
+  - 🌙 **Emojis** — emoji cipher mode (unchanged)
+  - 🏏 **Cricket** — `IND 186/4 Ov 18.3 RR 10.1 Target 212`
+  - 🛒 **Shopping** — `Milk x2 Rice x1 Sugar x3 Tea x1`
+  - 📝 **Notes** — `Project Ideas - Camera Module - Sensor Testing`
+  - 🎬 **Movie Review** — `Movie: Horizon Story: 7/10 Music: 8/10`
+  - 💻 **Tech Log** — `INFO 14:22:31 Connection Stable Response 200`
+- **How to use:** Long press the 🔒 cipher toggle in the bottom row → profile picker slides in → select a profile → all future encrypted messages use that cover
+- Payload is hidden in the cover text using invisible unicode markers
+- CipherKey automatically detects and extracts cover-encoded messages on decrypt
+- Fully compatible with HMAC integrity verification
 
 ### v1.2.1 — Quick Decrypt Bubble (Text Selection Actions)
 - **🔒 Encrypt** and **🔓 Decrypt** buttons now appear directly in Android's text selection toolbar
