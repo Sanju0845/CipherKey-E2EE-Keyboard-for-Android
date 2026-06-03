@@ -78,7 +78,7 @@ fun KeyboardView(
         modifier = modifier
             .fillMaxWidth()
             .background(ImmersiveSurface)
-            .padding(start = 4.dp, end = 4.dp, bottom = 0.dp)  // no bottom gap
+            .padding(start = 4.dp, end = 4.dp, bottom = 4.dp)
             .testTag("keyboard_keys_layout")
     ) {
         when {
@@ -212,23 +212,26 @@ fun KeyboardView(
                     }
                 }
             )
-            // Cipher toggle key — glow when active
-            LongPressKey(
-                label = if (isCipherModeOn) "🔒" else "🔓",
-                longPressLabel = coverProfileEmoji,
+            // Cipher toggle key — glows when on, long press opens profile picker
+            CipherKey(
+                isCipherModeOn = isCipherModeOn,
+                profileEmoji = coverProfileEmoji,
                 modifier = Modifier.weight(1.5f),
-                bgColor = if (isCipherModeOn) ImmersiveCyan else Slate700.copy(alpha = 0.55f),
-                textColor = if (isCipherModeOn) Color.Black else Slate100,
                 onTap = onToggleCipher,
                 onLongPress = onLongPressCipher
             )
             LongPressKey(
                 label = "space",
                 longPressLabel = "⌨",
-                modifier = Modifier.weight(4.5f),
-                bgColor = if (isCipherModeOn) Slate700 else Slate800,
+                modifier = Modifier.weight(3.5f),
                 onTap = onSpace,
                 onLongPress = onSwitchKeyboard
+            )
+            StandardKey(
+                label = ".",
+                modifier = Modifier.weight(1f),
+                bgColor = Slate700.copy(alpha = 0.55f),
+                onClick = { onKeyPress(".") }
             )
             SpecialKey(
                 label = "↩",
@@ -237,9 +240,6 @@ fun KeyboardView(
                 textColor = Color.White,
                 onClick = onEnter
             )
-        }
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shift key — shows ⇧ (off), filled ⇧ (one-shot), ⇪ (caps lock)

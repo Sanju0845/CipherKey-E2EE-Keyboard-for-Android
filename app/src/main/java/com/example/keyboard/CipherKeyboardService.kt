@@ -22,7 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -67,9 +66,8 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
     // Word prediction state
     private var wordSuggestions by mutableStateOf<List<String>>(emptyList())
 
-    // Which panel is showing: keyboard, clipboard or AI
-    private var activePanel by mutableStateOf(ActivePanel.KEYBOARD)
-    private var showPanelSelector by mutableStateOf(false)
+    // Which panel is showing: keyboard or clipboard
+    private var showClipboard by mutableStateOf(false)
 
     // Cover profile state
     private var coverProfile by mutableStateOf(com.example.cipher.CoverProfile.SYMBOLS)
@@ -118,35 +116,34 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
 
     @Composable
     fun KeyboardAppContent() {
-        LaunchedEffect(Unit) { refreshClipboardEntries() }
+        LaunchedEffect(Unit) {
+            refreshClipboardEntries()
+        }
 
+        // Capture keyboard height once so clipboard uses the same value
         var keyboardHeightPx by remember { mutableStateOf(0) }
-        val isClipboard = activePanel == ActivePanel.CLIPBOARD
-        val isAi = activePanel == ActivePanel.AI
 
-        Column(modifier = Modifier.fillMaxWidth().background(ImmersiveBg)) {
-
-            // ── Strip ─────────────────────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(ImmersiveBg)
+        ) {
+            // ── Always-visible strip ──────────────────────────────────────────
             KeyboardStrip(
-                suggestions = if (activePanel != ActivePanel.KEYBOARD) emptyList() else wordSuggestions,
+                suggestions = if (showClipboard) emptyList() else wordSuggestions,
                 onSuggestionClick = { handleSuggestionTap(it) },
                 isCipherModeOn = isCipherModeOn,
                 composingDraft = composingDraft,
-                showClipboard = isClipboard,
-                activePanel = activePanel,
+                showClipboard = showClipboard,
                 onToggleCipherMode = { isCipherModeOn = !isCipherModeOn },
                 onOpenClipboard = {
-                    // Toggle panel selector or go back to keyboard
-                    if (activePanel == ActivePanel.KEYBOARD) {
-                        showPanelSelector = !showPanelSelector
-                    } else {
-                        showPanelSelector = !showPanelSelector
-                    }
+                    if (!showClipboard) refreshClipboardEntries()
+                    showClipboard = !showClipboard
                 }
             )
 
-            // ── Profile picker ────────────────────────────────────────────────
-            if (showProfilePicker && activePanel == ActivePanel.KEYBOARD) {
+            // ── Profile picker (shown above keyboard when long-pressed 🔒) ────
+            if (showProfilePicker && !showClipboard) {
                 ProfilePickerSheet(
                     currentProfile = coverProfile,
                     onSelectProfile = { profile ->
@@ -156,21 +153,14 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                 )
             }
 
-            // ── Panel selector grid ───────────────────────────────────────────
-            if (showPanelSelector) {
-                PanelSelector(
-                    currentPanel = activePanel,
-                    onSelectPanel = { panel ->
-                        if (panel == ActivePanel.CLIPBOARD) refreshClipboardEntries()
-                        activePanel = panel
-                        showPanelSelector = false
-                    }
-                )
-            }
-
-            // ── Main content area ─────────────────────────────────────────────
-            Box(modifier = Modifier.fillMaxWidth()) {
-                // Keyboard (always laid out, invisible when another panel shows)
+            // ── Fixed-height container — prevents any layout jump ─────────────
+            // The keyboard is always composed (invisible when clipboard shows) so
+            // its height is always measured. Clipboard sits in the same Box at the
+            // same height. Crossfade swaps them with no resize.
+            Box(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Keyboard — always laid out so height is always known
                 KeyboardView(
                     activePage = activePage,
                     isCipherModeOn = isCipherModeOn,
@@ -194,33 +184,42 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                         .onGloballyPositioned { coords ->
                             if (coords.size.height > 0) keyboardHeightPx = coords.size.height
                         }
-                        .alpha(if (activePanel == ActivePanel.KEYBOARD) 1f else 0f)
-                        .then(
-                            if (activePanel != ActivePanel.KEYBOARD)
-                                Modifier.pointerInput(Unit) {} else Modifier
-                        )
+                        .alpha(if (showClipboard) 0f else 1f)
                 )
 
-                // Clipboard panel
-                AnimatedVisibility(
-                    visible = isClipboard,
+                // Clipboard — overlaid at the same height, crossfades in/out
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showClipboard,
                     enter = fadeIn(tween(200)),
                     exit = fadeOut(tween(180))
                 ) {
                     val density = androidx.compose.ui.platform.LocalDensity.current
-                    val clipH = if (keyboardHeightPx > 0) with(density) { keyboardHeightPx.toDp() } else 240.dp
+                    val clipH = if (keyboardHeightPx > 0)
+                        with(density) { keyboardHeightPx.toDp() }
+                    else 240.dp
+
                     ClipboardPanel(
                         entries = clipboardEntries,
-                        onBackToKeyboard = { activePanel = ActivePanel.KEYBOARD },
-                        onPasteRaw = { text -> pasteIntoField(text); activePanel = ActivePanel.KEYBOARD },
-                        onEncryptAndPaste = { text ->
-                            pasteIntoField(CipherEngine.encrypt(applicationContext, text, useSymbols))
-                            activePanel = ActivePanel.KEYBOARD
+                        onBackToKeyboard = { showClipboard = false },
+                        onPasteRaw = { text ->
+                            pasteIntoField(text)
+                            showClipboard = false
                         },
-                        onDecryptAndPaste = { text -> pasteIntoField(text); activePanel = ActivePanel.KEYBOARD },
+                        onEncryptAndPaste = { text ->
+                            val encrypted = CipherEngine.encrypt(applicationContext, text, useSymbols)
+                            pasteIntoField(encrypted)
+                            showClipboard = false
+                        },
+                        onDecryptAndPaste = { text ->
+                            pasteIntoField(text)
+                            showClipboard = false
+                        },
                         onDecryptPreview = { text ->
-                            val r = CipherEngine.decryptWithIntegrity(applicationContext, text)
-                            DecryptPreviewResult(r.plaintext ?: "", r.integrityOk)
+                            val result = CipherEngine.decryptWithIntegrity(applicationContext, text)
+                            DecryptPreviewResult(
+                                plaintext = result.plaintext ?: "",
+                                integrityOk = result.integrityOk
+                            )
                         },
                         onDelete = { id ->
                             ClipboardStore.removeEntry(id)
@@ -228,17 +227,6 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                         },
                         modifier = Modifier.height(clipH)
                     )
-                }
-
-                // AI panel — WebView kept alive, conversation persists
-                AnimatedVisibility(
-                    visible = isAi,
-                    enter = fadeIn(tween(200)),
-                    exit = fadeOut(tween(180))
-                ) {
-                    val density = androidx.compose.ui.platform.LocalDensity.current
-                    val panelH = if (keyboardHeightPx > 0) with(density) { keyboardHeightPx.toDp() } else 240.dp
-                    AiPanel(modifier = Modifier.height(panelH))
                 }
             }
         }
@@ -424,8 +412,7 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
         composingDraft = ""
         wordSuggestions = emptyList()
         clipboardEntries = emptyList()
-        activePanel = ActivePanel.KEYBOARD
-        showPanelSelector = false
+        showClipboard = false
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {

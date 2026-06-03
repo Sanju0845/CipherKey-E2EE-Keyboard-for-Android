@@ -1,5 +1,7 @@
 package com.example.keyboard
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,14 +41,14 @@ fun ProfilePickerSheet(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF0F1318))
+            .background(ImmersiveGlass)
             .padding(vertical = 8.dp)
     ) {
         Text(
             "Cover Profile  ·  Long press 🔒 to dismiss",
-            modifier = Modifier.padding(horizontal = 12.dp),
+            modifier = Modifier.padding(horizontal = 14.dp),
             color = Slate500,
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             letterSpacing = 0.5.sp
         )
         Spacer(Modifier.height(6.dp))
@@ -71,38 +74,40 @@ private fun ProfileChip(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val bg = if (isSelected) ImmersiveCyan.copy(alpha = 0.15f) else Color(0xFF1A1E26)
-    val border = if (isSelected) ImmersiveCyan else Color.Transparent
-    val textColor = if (isSelected) ImmersiveCyan else Slate300
+    val bgColor by animateColorAsState(
+        targetValue = if (isSelected) ImmersiveCyan.copy(alpha = 0.15f) else Color(0xFF141920),
+        animationSpec = tween(200), label = "chipBg"
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (isSelected) ImmersiveCyan else Slate400,
+        animationSpec = tween(200), label = "chipText"
+    )
 
-    Box(
+    Row(
         modifier = Modifier
-            .height(34.dp)
+            .height(36.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(bg)
+            .background(bgColor)
             .then(
-                if (isSelected) Modifier.border(1.5.dp, ImmersiveCyan, RoundedCornerShape(8.dp))
-                else Modifier
+                if (isSelected) Modifier.border(1.dp, ImmersiveCyan, RoundedCornerShape(8.dp))
+                else Modifier.border(1.dp, Slate800, RoundedCornerShape(8.dp))
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = androidx.compose.foundation.LocalIndication.current,
+                indication = androidx.compose.foundation.LocalIndication.current
+                ),
                 onClick = onClick
             )
             .padding(horizontal = 12.dp),
-        contentAlignment = Alignment.Center
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(profile.emoji, fontSize = 14.sp)
-            Text(
-                profile.displayName,
-                color = textColor,
-                fontSize = 12.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-            )
-        }
+        Text(profile.emoji, fontSize = 14.sp)
+        Text(
+            profile.displayName,
+            color = textColor,
+            fontSize = 12.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+        )
     }
 }

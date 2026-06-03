@@ -5,11 +5,14 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -62,11 +65,11 @@ fun ClipboardPanel(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF0D1014))
+            .background(ImmersiveClipBg)
     ) {
         Text(
-            text = "Tap to paste  ·  Tap 🔒 to encrypt  ·  Tap 🔓 to preview decrypted",
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            text = "Tap to paste  ·  🔒 encrypt  ·  🔓 preview",
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
             color = Slate600,
             fontSize = 11.sp
         )
@@ -93,16 +96,22 @@ fun ClipboardPanel(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(entries, key = { it.id }) { entry ->
-                    SwipeToDeleteWrapper(
-                        onDelete = { onDelete(entry.id) }
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = slideInVertically(
+                            initialOffsetY = { -it / 2 },
+                            animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
+                        ) + fadeIn(tween(200))
                     ) {
-                        ClipCard(
-                            entry = entry,
-                            onPasteRaw = { onPasteRaw(entry.text) },
-                            onEncrypt = { onEncryptAndPaste(entry.text) },
-                            onDecryptPreview = { onDecryptPreview(entry.text) },
-                            onDecryptAndPaste = { plain -> onDecryptAndPaste(plain) }
-                        )
+                        SwipeToDeleteWrapper(onDelete = { onDelete(entry.id) }) {
+                            ClipCard(
+                                entry = entry,
+                                onPasteRaw = { onPasteRaw(entry.text) },
+                                onEncrypt = { onEncryptAndPaste(entry.text) },
+                                onDecryptPreview = { onDecryptPreview(entry.text) },
+                                onDecryptAndPaste = { plain -> onDecryptAndPaste(plain) }
+                            )
+                        }
                     }
                 }
             }
@@ -134,7 +143,8 @@ private fun ClipCard(
                 .heightIn(min = 56.dp)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = androidx.compose.foundation.LocalIndication.current,
+                    indication = androidx.compose.foundation.LocalIndication.current
+                    ),
                     onClick = onPasteRaw
                 ),
             verticalAlignment = Alignment.CenterVertically
@@ -207,7 +217,7 @@ private fun ClipCard(
                             if (decryptedPreview != null) "hide" else "read"
                         } else "encrypt",
                         color = if (entry.isCipher) ImmersiveCyan else ImmersiveIndigoLight,
-                        fontSize = 10.sp,
+                        fontSize = 8.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }

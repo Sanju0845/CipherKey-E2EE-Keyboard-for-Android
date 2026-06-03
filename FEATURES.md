@@ -1,6 +1,6 @@
 # CipherKey — Features & Architecture
 
-> Latest: Version 1.3.0
+> Latest: Version 1.2.4
 
 ---
 
@@ -14,22 +14,21 @@ Messages are encrypted *before* they leave your keyboard, meaning no app, server
 
 ## Changelog
 
-### v1.2.4 — Premium Microinteractions & UI Polish
-- Key height increased to 48dp, corner radius 10dp — more touch-friendly
-- Key press animation: popup spring effect (keys grow on tap, snap back)
-- Suggestion strip height 48dp — matches Material 3 standards
-- Active cipher lock shows cyan glow background
-- Clipboard/keyboard toggle icon touch target increased to 44dp
-- Fixed clipboard card min-height (wraps content, no clipping)
-- Fixed clipboard item label font sizes (10sp min)
-- Fixed hint text font sizes (11sp min)
-- Fixed profile picker selected border (real 1.5dp cyan border)
-- Fixed alpha-invisible keyboard receiving touch events (absorbed by empty pointerInput)
-- Removed dot key from bottom row — spacebar weight 4.5f, much wider
-- AMOLED + glassmorphism color tokens added to theme
-- Consolidated hardcoded hex colors into Color.kt semantic tokens
-- "CipherKey · type to get suggestions" placeholder in strip
-- Spring-based animations on all keys (natural bounce physics)
+### v1.2.4 — Premium Microinteractions & AMOLED UI
+- **AMOLED black theme** — true `#000000` background, maximum contrast on OLED screens
+- **Key popups** — letter pops up above each key when pressed (like Gboard)
+- **Spring animations** — all keys use Material 3 spring physics (bouncy press/release)
+- **Soft glow on cipher key** — 🔒 key radiates a cyan radial gradient when cipher mode is ON
+- **Animated clipboard cards** — slide in from top with spring bounce on open
+- **Ripple effects** — Material ripple on all tappable elements
+- **Animated strip** — background color transitions when entering cipher mode
+- **Real chip border** — selected cover profile chip now has a proper visible cyan border
+- **Bigger touch targets** — suggestion strip 48dp, clipboard/keyboard icon 48dp (was 32dp)
+- **Readable font sizes** — minimum 11sp everywhere (was 8-9sp)
+- **Wrap-height clipboard cards** — cards no longer clip long messages (was fixed 56dp)
+- **Consolidated color palette** — all hardcoded hex colors moved to Color.kt
+- **Glassmorphism profile picker** — frosted glass background on cover profile sheet
+- **Animated cipher badge** — pulsing dot indicator in suggestion strip when typing encrypted
 
 ### v1.2.3 — Long Press Space → Keyboard Switcher
 - Long press the **spacebar** → opens Android's built-in keyboard picker instantly
