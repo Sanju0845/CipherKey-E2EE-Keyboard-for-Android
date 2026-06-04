@@ -1,7 +1,8 @@
 package com.example.keyboard
 
 import android.view.HapticFeedbackConstants
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -15,8 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
@@ -24,15 +23,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val KeyShape = RoundedCornerShape(10.dp)
-private val KeyHeight = 46.dp   // +2dp from 44 — slightly more comfortable
+private val KeyShape = RoundedCornerShape(8.dp)
+private val KeyHeight = 44.dp
 
-// ── Standard key with popup on press ─────────────────────────────────────────
+// ── Standard key — simple fast tween, no popup (popup causes lag) ─────────────
 @Composable
 fun StandardKey(
     label: String,
@@ -42,87 +40,51 @@ fun StandardKey(
     textColor: Color = Slate100,
     onClick: (() -> Unit)? = null,
     glideHighlight: Boolean = false,
-    showPopup: Boolean = true   // show letter popup above key when pressed
+    showPopup: Boolean = false   // disabled — too heavy on keyboard service
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val view = LocalView.current
 
-    // Spring animation for press
     val scale by animateFloatAsState(
-        targetValue = when {
-            glideHighlight -> 1.06f
-            pressed -> 0.88f
-            else -> 1f
-        },
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessHigh
-        ),
-        label = "keyScale"
+        targetValue = if (glideHighlight || pressed) 0.93f else 1f,
+        animationSpec = tween(60),
+        label = "ks"
     )
 
-    val displayBg = if (glideHighlight || pressed) pressedBgColor else bgColor
-
-    Box(modifier = modifier.height(KeyHeight)) {
-        // ── Popup above key when pressed ──────────────────────────────────────
-        if (showPopup && pressed && label.length <= 2) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .offset(y = (-36).dp)
-                    .zIndex(10f)
-                    .shadow(8.dp, RoundedCornerShape(8.dp))
-                    .background(KeyPopupBg, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = label.uppercase(),
-                    color = KeyPopupText,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-
-        // ── Key itself ────────────────────────────────────────────────────────
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .scale(scale)
-                .clip(KeyShape)
-                .background(displayBg, KeyShape)
-                .then(
-                    if (onClick != null) {
-                        Modifier.clickable(
-                            interactionSource = interactionSource,
-                            indication = androidx.compose.foundation.LocalIndication.current,
-                            onClick = {
-                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                                onClick()
-                            }
-                        )
-                    } else Modifier
-                )
-                .testTag("key_$label"),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = label,
-                color = textColor,
-                fontSize = when {
-                    label.length > 3 -> 10.sp
-                    label.length > 1 -> 13.sp
-                    else -> 18.sp
-                },
-                fontWeight = FontWeight.Medium
+    Box(
+        modifier = modifier
+            .height(KeyHeight)
+            .scale(scale)
+            .clip(KeyShape)
+            .background(if (glideHighlight || pressed) pressedBgColor else bgColor, KeyShape)
+            .then(
+                if (onClick != null) Modifier.clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        onClick()
+                    }
+                ) else Modifier
             )
-        }
+            .testTag("key_$label"),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = textColor,
+            fontSize = when {
+                label.length > 3 -> 10.sp
+                label.length > 1 -> 13.sp
+                else -> 17.sp
+            },
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
-// ── Backspace — long press deletes word by word ───────────────────────────────
+// ── Backspace ─────────────────────────────────────────────────────────────────
 @Composable
 fun BackspaceKey(
     modifier: Modifier = Modifier,
@@ -135,9 +97,8 @@ fun BackspaceKey(
     var pressed by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.88f else 1f,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh),
-        label = "bsScale"
+        targetValue = if (pressed) 0.93f else 1f,
+        animationSpec = tween(60), label = "bk"
     )
 
     Box(
@@ -175,11 +136,11 @@ fun BackspaceKey(
             .testTag("key_backspace"),
         contentAlignment = Alignment.Center
     ) {
-        Text("⌫", color = Slate300, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("⌫", color = Slate300, fontSize = 17.sp, fontWeight = FontWeight.Bold)
     }
 }
 
-// ── Special key (shift, ?123, ↩, etc.) ───────────────────────────────────────
+// ── Special key ───────────────────────────────────────────────────────────────
 @Composable
 fun SpecialKey(
     label: String,
@@ -194,9 +155,8 @@ fun SpecialKey(
     val view = LocalView.current
 
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.88f else 1f,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh),
-        label = "spKeyScale"
+        targetValue = if (pressed) 0.93f else 1f,
+        animationSpec = tween(60), label = "sk"
     )
 
     Box(
@@ -207,7 +167,7 @@ fun SpecialKey(
             .background(if (pressed) pressedBgColor else bgColor, KeyShape)
             .clickable(
                 interactionSource = interactionSource,
-                indication = androidx.compose.foundation.LocalIndication.current,
+                indication = null,
                 onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     onClick()
@@ -219,16 +179,13 @@ fun SpecialKey(
         Text(
             text = label,
             color = textColor,
-            fontSize = when {
-                label.length > 3 -> 11.sp
-                else -> 14.sp
-            },
+            fontSize = when { label.length > 3 -> 11.sp; else -> 14.sp },
             fontWeight = FontWeight.SemiBold
         )
     }
 }
 
-// ── Cipher key — glows cyan when active ──────────────────────────────────────
+// ── Cipher key — flat color glow, no gradient (gradients are expensive) ───────
 @Composable
 fun CipherKey(
     isCipherModeOn: Boolean,
@@ -241,29 +198,19 @@ fun CipherKey(
     val scope = rememberCoroutineScope()
     var pressed by remember { mutableStateOf(false) }
 
-    // Pulsing glow when cipher is on
-    val glowAlpha by animateFloatAsState(
-        targetValue = if (isCipherModeOn) 0.6f else 0f,
-        animationSpec = tween(400, easing = FastOutSlowInEasing),
-        label = "cipherGlow"
-    )
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.88f else 1f,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh),
-        label = "cipherScale"
+        targetValue = if (pressed) 0.93f else 1f,
+        animationSpec = tween(60), label = "ck"
     )
 
-    val bg = if (isCipherModeOn)
-        Brush.radialGradient(listOf(ImmersiveCyanGlow, ImmersiveCyan.copy(alpha = 0.25f)))
-    else
-        Brush.linearGradient(listOf(KeySpecialBg, KeySpecialBg))
+    val bg = if (isCipherModeOn) ImmersiveCyan.copy(alpha = 0.22f) else KeySpecialBg
 
     Box(
         modifier = modifier
             .height(KeyHeight)
             .scale(scale)
             .clip(KeyShape)
-            .background(bg)
+            .background(bg, KeyShape)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = { _ ->
@@ -277,12 +224,8 @@ fun CipherKey(
                         }
                         val released = tryAwaitRelease()
                         pressed = false
-                        if (released && job.isActive) {
-                            job.cancel()
-                            onTap()
-                        } else {
-                            job.cancel()
-                        }
+                        if (released && job.isActive) { job.cancel(); onTap() }
+                        else job.cancel()
                     }
                 )
             }
@@ -291,28 +234,25 @@ fun CipherKey(
     ) {
         Text(
             text = if (isCipherModeOn) "🔒" else "🔓",
-            fontSize = 16.sp
+            fontSize = 15.sp
         )
-        // Profile emoji hint
         Text(
             text = profileEmoji,
             fontSize = 8.sp,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 3.dp, end = 4.dp),
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 3.dp, end = 4.dp),
             color = if (isCipherModeOn) ImmersiveCyan else Slate600
         )
     }
 }
 
-// ── Long press key (top row letters with number hints) ───────────────────────
+// ── Long press key — no popup, just number hint ───────────────────────────────
 @Composable
 fun LongPressKey(
     label: String,
     longPressLabel: String,
     modifier: Modifier = Modifier,
     glideHighlight: Boolean = false,
-    showPopup: Boolean = true,   // set false for spacebar / special keys
+    showPopup: Boolean = false,   // popup disabled for performance
     onTap: () -> Unit,
     onLongPress: () -> Unit
 ) {
@@ -321,79 +261,43 @@ fun LongPressKey(
     var pressed by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
-        targetValue = when {
-            glideHighlight -> 1.06f
-            pressed -> 0.88f
-            else -> 1f
-        },
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh),
-        label = "lpKeyScale"
+        targetValue = if (glideHighlight || pressed) 0.93f else 1f,
+        animationSpec = tween(60), label = "lk"
     )
 
-    val bg = if (glideHighlight || pressed) KeyBgPressed else KeyBg
-
-    Box(modifier = modifier.height(KeyHeight)) {
-        // Popup on press (suppressed for keys like spacebar)
-        if (showPopup && pressed) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .offset(y = (-36).dp)
-                    .zIndex(10f)
-                    .shadow(8.dp, RoundedCornerShape(8.dp))
-                    .background(KeyPopupBg, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = label.uppercase(),
-                    color = KeyPopupText,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
+    Box(
+        modifier = modifier
+            .height(KeyHeight)
+            .scale(scale)
+            .clip(KeyShape)
+            .background(if (glideHighlight || pressed) KeyBgPressed else KeyBg, KeyShape)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = { _ ->
+                        pressed = true
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        val job = scope.launch {
+                            delay(350)
+                            pressed = false
+                            onLongPress()
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        }
+                        val released = tryAwaitRelease()
+                        pressed = false
+                        if (released && job.isActive) { job.cancel(); onTap() }
+                        else job.cancel()
+                    }
                 )
             }
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .scale(scale)
-                .clip(RoundedCornerShape(10.dp))
-                .background(bg, RoundedCornerShape(10.dp))
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onPress = { _ ->
-                            pressed = true
-                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                            val job = scope.launch {
-                                delay(350)
-                                pressed = false
-                                onLongPress()
-                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                            }
-                            val released = tryAwaitRelease()
-                            pressed = false
-                            if (released && job.isActive) {
-                                job.cancel()
-                                onTap()
-                            } else {
-                                job.cancel()
-                            }
-                        }
-                    )
-                }
-                .testTag("key_lp_$label"),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(label, color = Slate100, fontSize = 18.sp, fontWeight = FontWeight.Medium)
-            Text(
-                longPressLabel,
-                color = Slate500,
-                fontSize = 9.sp,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 3.dp, end = 4.dp)
-            )
-        }
+            .testTag("key_lp_$label"),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = Slate100, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+        Text(
+            longPressLabel,
+            color = Slate500,
+            fontSize = 9.sp,
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 3.dp, end = 4.dp)
+        )
     }
 }

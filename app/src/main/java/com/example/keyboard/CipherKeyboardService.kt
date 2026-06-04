@@ -93,6 +93,23 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
         ClipboardStore.attach(applicationContext) {
             mainHandler.post { clipboardEntries = ClipboardStore.getEntries() }
         }
+        // Preload ChatGPT WebView in background so it's instant when user taps AI
+        mainHandler.postDelayed({
+            if (AiWebViewHolder.webView == null) {
+                try {
+                    val wv = android.webkit.WebView(applicationContext)
+                    wv.settings.apply {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                    }
+                    android.webkit.CookieManager.getInstance().setAcceptCookie(true)
+                    wv.loadUrl("https://chatgpt.com")
+                    AiWebViewHolder.webView = wv
+                    AiWebViewHolder.isLoaded = false
+                } catch (_: Exception) {}
+            }
+        }, 2000) // 2s delay so it doesn't compete with keyboard init
     }
 
     override fun onCreateInputView(): View {
