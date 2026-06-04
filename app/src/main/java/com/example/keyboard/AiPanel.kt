@@ -52,7 +52,7 @@ fun AiPanel(modifier: Modifier = Modifier) {
                         javaScriptEnabled = true
                         domStorageEnabled = true
                         databaseEnabled = true
-                        cacheMode = WebSettings.LOAD_DEFAULT
+                        cacheMode = WebSettings.LOAD_NO_CACHE
                         javaScriptCanOpenWindowsAutomatically = true
                         mediaPlaybackRequiresUserGesture = false
                         setSupportZoom(true)

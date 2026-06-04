@@ -149,18 +149,6 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                 )
             }
 
-            // ── Panel selector grid ───────────────────────────────────────────
-            if (showPanelSelector) {
-                PanelSelector(
-                    currentPanel = activePanel,
-                    onSelectPanel = { panel ->
-                        if (panel == ActivePanel.CLIPBOARD) refreshClipboardEntries()
-                        activePanel = panel
-                        showPanelSelector = false
-                    }
-                )
-            }
-
             // ── Main content area ─────────────────────────────────────────────
             Box(modifier = Modifier.fillMaxWidth()) {
                 // Keyboard (always laid out, invisible when another panel shows)
@@ -232,6 +220,27 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                     val density = androidx.compose.ui.platform.LocalDensity.current
                     val panelH = if (keyboardHeightPx > 0) with(density) { keyboardHeightPx.toDp() } else 240.dp
                     AiPanel(modifier = Modifier.height(panelH))
+                }
+
+                // Panel selector — overlays at keyboard height, no extra height added
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showPanelSelector,
+                    enter = fadeIn(tween(150)),
+                    exit = fadeOut(tween(120))
+                ) {
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val selectorH = if (keyboardHeightPx > 0) with(density) { keyboardHeightPx.toDp() } else 240.dp
+                    Box(modifier = Modifier.height(selectorH)) {
+                        PanelSelector(
+                            currentPanel = activePanel,
+                            onSelectPanel = { panel ->
+                                if (panel == ActivePanel.CLIPBOARD) refreshClipboardEntries()
+                                activePanel = panel
+                                showPanelSelector = false
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
         }
