@@ -1,0 +1,136 @@
+name: Release APKs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write   # required to create releases and upload assets
+
+    steps:
+      # ── 1. Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so we can read all tags
+
+      # ── 2. Java + Gradle ─────────────────────────────────────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create local.properties
+        run: echo "sdk.dir=${ANDROID_HOME}" >> local.properties
+
+      - name: Grant execute permission for Gradle wrapper
+        run: chmod +x gradlew
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # ── 3. Read version from build.gradle.kts ────────────────────────────────
+      - name: Extract version info
+        id: version
+        run: |
+          VERSION_NAME=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          VERSION_CODE=$(grep 'versionCode' app/build.gradle.kts | head -1 | grep -o '[0-9]*')
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "version_name=${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "version_code=${VERSION_CODE}" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "release_tag=v${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "release_name=CipherKey v${VERSION_NAME} (build ${VERSION_CODE})" >> $GITHUB_OUTPUT
+
+      # ── 4. Build APKs ────────────────────────────────────────────────────────
+      - name: Build debug and release APKs
+        run: ./gradlew assembleDebug assembleRelease --no-daemon
+
+      # ── 5. Rename APKs with version info ─────────────────────────────────────
+      - name: Rename APKs
+        run: |
+          VERSION="${{ steps.version.outputs.version_name }}"
+          SHA="${{ steps.version.outputs.short_sha }}"
+
+          # Debug APK
+          mv app/build/outputs/apk/debug/app-debug.apk \
+             app/build/outputs/apk/debug/CipherKey-v${VERSION}-debug.apk || true
+
+          # Release APK (unsigned)
+          mv app/build/outputs/apk/release/app-release-unsigned.apk \
+             app/build/outputs/apk/release/CipherKey-v${VERSION}-release-unsigned.apk 2>/dev/null || true
+          # Or signed release if signing config succeeded
+          mv app/build/outputs/apk/release/app-release.apk \
+             app/build/outputs/apk/release/CipherKey-v${VERSION}-release.apk 2>/dev/null || true
+
+      # ── 6. Zip debug + release together ──────────────────────────────────────
+      - name: Create combined ZIP
+        run: |
+          VERSION="${{ steps.version.outputs.version_name }}"
+          mkdir -p zip_output
+          cp app/build/outputs/apk/debug/CipherKey-v${VERSION}-debug.apk zip_output/ 2>/dev/null || true
+          cp app/build/outputs/apk/release/CipherKey-v${VERSION}-release-unsigned.apk zip_output/ 2>/dev/null || true
+          cp app/build/outputs/apk/release/CipherKey-v${VERSION}-release.apk zip_output/ 2>/dev/null || true
+          cd zip_output
+          zip -r ../CipherKey-v${VERSION}-all-apks.zip .
+          cd ..
+          ls -lh *.zip
+
+      # ── 7. Extract commit message for release notes ───────────────────────────
+      - name: Get commit message
+        id: commit
+        run: |
+          MSG=$(git log -1 --pretty=%B | head -5)
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # ── 8. Create or update GitHub Release ───────────────────────────────────
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.release_tag }}
+          name: ${{ steps.version.outputs.release_name }}
+          body: |
+            ## CipherKey ${{ steps.version.outputs.release_name }}
+
+            **Commit:** `${{ steps.version.outputs.short_sha }}`
+            **Build:** ${{ steps.version.outputs.version_code }}
+
+            ### What's in this release
+            ${{ steps.commit.outputs.message }}
+
+            ---
+            ### Downloads
+            | File | Description |
+            |---|---|
+            | `CipherKey-v${{ steps.version.outputs.version_name }}-debug.apk` | Debug APK — install directly |
+            | `CipherKey-v${{ steps.version.outputs.version_name }}-release*.apk` | Release APK |
+            | `CipherKey-v${{ steps.version.outputs.version_name }}-all-apks.zip` | Both APKs zipped |
+
+            > **Install:** Enable "Install from unknown sources" in Android Settings, then open the debug APK.
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: |
+            app/build/outputs/apk/debug/CipherKey-v${{ steps.version.outputs.version_name }}-debug.apk
+            app/build/outputs/apk/release/CipherKey-v${{ steps.version.outputs.version_name }}-release-unsigned.apk
+            app/build/outputs/apk/release/CipherKey-v${{ steps.version.outputs.version_name }}-release.apk
+            CipherKey-v${{ steps.version.outputs.version_name }}-all-apks.zip
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
