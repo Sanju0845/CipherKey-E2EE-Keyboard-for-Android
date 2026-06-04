@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -24,66 +25,58 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.*
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.compose.ui.platform.ComposeView
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.*
 
 private const val AI_URL = "https://chatgpt.com"
 
-/**
- * Singleton WebView holder — survives open/close of the floating window.
- * Login session and conversation state persist as long as the keyboard service is alive.
- */
 object AiWebViewHolder {
     var webView: WebView? = null
     var isLoaded = false
 }
 
-/**
- * Floating AI window — appears above the keyboard as a rounded capsule.
- * User can type with the keyboard below and interact with ChatGPT above.
- * Tap ↓ to dismiss.
- */
+// Standalone owners that don't reference themselves
+private class FloatingLifecycleOwner : LifecycleOwner {
+    val registry = LifecycleRegistry(this)
+    override val lifecycle: Lifecycle get() = registry
+}
+
+private class FloatingSavedStateOwner(
+    private val lo: FloatingLifecycleOwner
+) : SavedStateRegistryOwner {
+    private val ctrl = SavedStateRegistryController.create(this)
+    override val lifecycle: Lifecycle get() = lo.lifecycle
+    override val savedStateRegistry: SavedStateRegistry get() = ctrl.savedStateRegistry
+    fun init() = ctrl.performRestore(null)
+}
+
 class AiFloatingWindow(
     private val context: Context,
     private val windowManager: WindowManager,
     private val onDismiss: () -> Unit
 ) {
     private var floatingView: View? = null
-
-    // Concrete lifecycle owner — avoids the recursive self-reference problem
-    private val lifecycleOwner = object : LifecycleOwner {
-        val registry = LifecycleRegistry(this)
-        override val lifecycle: Lifecycle get() = registry
-    }
+    private val lifecycleOwner = FloatingLifecycleOwner()
+    private val savedStateOwner = FloatingSavedStateOwner(lifecycleOwner)
     private val vmStore = ViewModelStore()
-    private val savedStateController = SavedStateRegistryController.create(
-        object : SavedStateRegistryOwner {
-            override val lifecycle: Lifecycle get() = lifecycleOwner.lifecycle
-            override val savedStateRegistry: SavedStateRegistry
-                get() = savedStateController.savedStateRegistry
-        }
-    )
 
     fun show() {
         if (floatingView != null) return
 
-        savedStateController.performRestore(null)
+        savedStateOwner.init()
         lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
         lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
@@ -91,13 +84,9 @@ class AiFloatingWindow(
         val composeView = ComposeView(context).apply {
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeViewModelStoreOwner(object : ViewModelStoreOwner {
-                override val viewModelStore get() = vmStore
+                override val viewModelStore: ViewModelStore get() = vmStore
             })
-            setViewTreeSavedStateRegistryOwner(object : SavedStateRegistryOwner {
-                override val lifecycle: Lifecycle get() = lifecycleOwner.lifecycle
-                override val savedStateRegistry: SavedStateRegistry
-                    get() = savedStateController.savedStateRegistry
-            })
+            setViewTreeSavedStateRegistryOwner(savedStateOwner)
             setContent {
                 MyApplicationTheme {
                     AiFloatingContent(onDismiss = { dismiss() })
@@ -119,8 +108,6 @@ class AiFloatingWindow(
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.BOTTOM
-            // Position above the keyboard — offset from bottom
-            y = 0
         }
 
         try {
@@ -160,14 +147,13 @@ private fun AiFloatingContent(onDismiss: () -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
-        // Rounded floating card
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color(0xFF0F1117))
         ) {
-            // Header bar with title and close button
+            // Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -181,14 +167,8 @@ private fun AiFloatingContent(onDismiss: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text("✦", fontSize = 14.sp, color = ImmersiveCyan)
-                    Text(
-                        "ChatGPT",
-                        color = Slate200,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Text("ChatGPT", color = Slate200, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
-                // Close / collapse button
                 Box(
                     modifier = Modifier
                         .size(28.dp)
@@ -205,7 +185,7 @@ private fun AiFloatingContent(onDismiss: () -> Unit) {
                 }
             }
 
-            // WebView — 280dp tall (leaves room for keyboard below)
+            // WebView — 280dp
             AndroidView(
                 factory = { ctx ->
                     AiWebViewHolder.webView ?: WebView(ctx).also { wv ->
@@ -222,7 +202,6 @@ private fun AiFloatingContent(onDismiss: () -> Unit) {
                             displayZoomControls = false
                             useWideViewPort = true
                             loadWithOverviewMode = true
-                            // Smaller initial scale for compact view
                             textZoom = 85
                             userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 8) " +
                                 "AppleWebKit/537.36 (KHTML, like Gecko) " +
@@ -244,9 +223,7 @@ private fun AiFloatingContent(onDismiss: () -> Unit) {
                     }
                 },
                 update = {},
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(280.dp)
+                modifier = Modifier.fillMaxWidth().height(280.dp)
             )
         }
     }
