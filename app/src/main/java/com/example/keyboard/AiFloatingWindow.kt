@@ -1,0 +1,252 @@
+package com.example.keyboard
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.graphics.PixelFormat
+import android.os.Build
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.*
+
+private const val AI_URL = "https://chatgpt.com"
+
+/**
+ * Singleton WebView holder — survives open/close of the floating window.
+ * Login session and conversation state persist as long as the keyboard service is alive.
+ */
+object AiWebViewHolder {
+    var webView: WebView? = null
+    var isLoaded = false
+}
+
+/**
+ * Floating AI window — appears above the keyboard as a rounded capsule.
+ * User can type with the keyboard below and interact with ChatGPT above.
+ * Tap ↓ to dismiss.
+ */
+class AiFloatingWindow(
+    private val context: Context,
+    private val windowManager: WindowManager,
+    private val onDismiss: () -> Unit
+) {
+    private var floatingView: View? = null
+
+    // Simple lifecycle/state owners needed for ComposeView inside a plain View
+    private val lifecycleRegistry = LifecycleRegistry(object : LifecycleOwner {
+        override val lifecycle get() = lifecycleRegistry
+    })
+    private val viewModelStore = ViewModelStore()
+    private val savedStateController = SavedStateRegistryController.create(
+        object : SavedStateRegistryOwner {
+            override val lifecycle get() = lifecycleRegistry
+            override val savedStateRegistry get() = savedStateController.savedStateRegistry
+        }
+    )
+
+    fun show() {
+        if (floatingView != null) return
+
+        savedStateController.performRestore(null)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+
+        val composeView = ComposeView(context).apply {
+            setViewTreeLifecycleOwner(object : LifecycleOwner {
+                override val lifecycle get() = lifecycleRegistry
+            })
+            setViewTreeViewModelStoreOwner(object : ViewModelStoreOwner {
+                override val viewModelStore get() = this@AiFloatingWindow.viewModelStore
+            })
+            setViewTreeSavedStateRegistryOwner(object : SavedStateRegistryOwner {
+                override val lifecycle get() = lifecycleRegistry
+                override val savedStateRegistry get() = savedStateController.savedStateRegistry
+            })
+            setContent {
+                MyApplicationTheme {
+                    AiFloatingContent(onDismiss = { dismiss() })
+                }
+            }
+        }
+
+        floatingView = composeView
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.BOTTOM
+            // Position above the keyboard — offset from bottom
+            y = 0
+        }
+
+        try {
+            windowManager.addView(composeView, params)
+        } catch (e: Exception) {
+            floatingView = null
+        }
+    }
+
+    fun dismiss() {
+        floatingView?.let {
+            try { windowManager.removeView(it) } catch (_: Exception) {}
+            floatingView = null
+        }
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+        onDismiss()
+    }
+
+    fun isShowing() = floatingView != null
+
+    fun destroy() {
+        dismiss()
+        AiWebViewHolder.webView?.destroy()
+        AiWebViewHolder.webView = null
+        AiWebViewHolder.isLoaded = false
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        viewModelStore.clear()
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun AiFloatingContent(onDismiss: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        // Rounded floating card
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF0F1117))
+        ) {
+            // Header bar with title and close button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF161B22))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("✦", fontSize = 14.sp, color = ImmersiveCyan)
+                    Text(
+                        "ChatGPT",
+                        color = Slate200,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                // Close / collapse button
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF252B35))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = androidx.compose.foundation.LocalIndication.current,
+                            onClick = onDismiss
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("↓", color = Slate400, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // WebView — 280dp tall (leaves room for keyboard below)
+            AndroidView(
+                factory = { ctx ->
+                    AiWebViewHolder.webView ?: WebView(ctx).also { wv ->
+                        AiWebViewHolder.webView = wv
+                        wv.settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            databaseEnabled = true
+                            cacheMode = WebSettings.LOAD_NO_CACHE
+                            javaScriptCanOpenWindowsAutomatically = true
+                            mediaPlaybackRequiresUserGesture = false
+                            setSupportZoom(false)
+                            builtInZoomControls = false
+                            displayZoomControls = false
+                            useWideViewPort = true
+                            loadWithOverviewMode = true
+                            // Smaller initial scale for compact view
+                            textZoom = 85
+                            userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 8) " +
+                                "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                                "Chrome/124.0.0.0 Mobile Safari/537.36"
+                        }
+                        CookieManager.getInstance().apply {
+                            setAcceptCookie(true)
+                            setAcceptThirdPartyCookies(wv, true)
+                        }
+                        wv.webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView, url: String) {
+                                super.onPageFinished(view, url)
+                                AiWebViewHolder.isLoaded = true
+                                CookieManager.getInstance().flush()
+                            }
+                        }
+                        wv.webChromeClient = WebChromeClient()
+                        if (!AiWebViewHolder.isLoaded) wv.loadUrl(AI_URL)
+                    }
+                },
+                update = {},
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(280.dp)
+            )
+        }
+    }
+}

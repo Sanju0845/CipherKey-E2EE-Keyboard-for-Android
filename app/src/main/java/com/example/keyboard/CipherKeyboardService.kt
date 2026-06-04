@@ -77,6 +77,9 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
     private var coverProfile by mutableStateOf(com.example.cipher.CoverProfile.SYMBOLS)
     private var showProfilePicker by mutableStateOf(false)
 
+    // Floating AI window (above keyboard, keyboard stays usable)
+    private var aiFloatingWindow: AiFloatingWindow? = null
+
     // Clipboard entries shown in the panel
     private var clipboardEntries by mutableStateOf<List<ClipboardEntry>>(emptyList())
 
@@ -134,7 +137,14 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                 activePanel = activePanel,
                 onToggleCipherMode = { isCipherModeOn = !isCipherModeOn },
                 onOpenClipboard = {
-                    showPanelSelector = !showPanelSelector
+                    if (activePanel == ActivePanel.AI) {
+                        // Close AI floating window and go back to keyboard
+                        aiFloatingWindow?.dismiss()
+                        activePanel = ActivePanel.KEYBOARD
+                        showPanelSelector = false
+                    } else {
+                        showPanelSelector = !showPanelSelector
+                    }
                 }
             )
 
@@ -175,9 +185,9 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                         .onGloballyPositioned { coords ->
                             if (coords.size.height > 0) keyboardHeightPx = coords.size.height
                         }
-                        .alpha(if (activePanel == ActivePanel.KEYBOARD) 1f else 0f)
+                        .alpha(if (activePanel == ActivePanel.KEYBOARD || activePanel == ActivePanel.AI) 1f else 0f)
                         .then(
-                            if (activePanel != ActivePanel.KEYBOARD)
+                            if (activePanel == ActivePanel.CLIPBOARD)
                                 Modifier.pointerInput(Unit) {} else Modifier
                         )
                 )
@@ -211,17 +221,6 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                     )
                 }
 
-                // AI panel — WebView kept alive, conversation persists
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = isAi,
-                    enter = fadeIn(tween(200)),
-                    exit = fadeOut(tween(180))
-                ) {
-                    val density = androidx.compose.ui.platform.LocalDensity.current
-                    val panelH = if (keyboardHeightPx > 0) with(density) { keyboardHeightPx.toDp() } else 240.dp
-                    AiPanel(modifier = Modifier.height(panelH))
-                }
-
                 // Panel selector — overlays at keyboard height, no extra height added
                 androidx.compose.animation.AnimatedVisibility(
                     visible = showPanelSelector,
@@ -234,9 +233,34 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                         PanelSelector(
                             currentPanel = activePanel,
                             onSelectPanel = { panel ->
-                                if (panel == ActivePanel.CLIPBOARD) refreshClipboardEntries()
-                                activePanel = panel
-                                showPanelSelector = false
+                                when (panel) {
+                                    ActivePanel.AI -> {
+                                        // Launch floating window — keyboard stays below
+                                        val wm = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+                                        if (aiFloatingWindow == null) {
+                                            aiFloatingWindow = AiFloatingWindow(
+                                                context = applicationContext,
+                                                windowManager = wm,
+                                                onDismiss = {
+                                                    activePanel = ActivePanel.KEYBOARD
+                                                    aiFloatingWindow = null
+                                                }
+                                            )
+                                        }
+                                        aiFloatingWindow?.show()
+                                        activePanel = ActivePanel.AI
+                                        showPanelSelector = false
+                                    }
+                                    ActivePanel.CLIPBOARD -> {
+                                        refreshClipboardEntries()
+                                        activePanel = panel
+                                        showPanelSelector = false
+                                    }
+                                    else -> {
+                                        activePanel = panel
+                                        showPanelSelector = false
+                                    }
+                                }
                             },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -432,6 +456,9 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
+        // Dismiss floating AI window when keyboard closes
+        aiFloatingWindow?.dismiss()
+        aiFloatingWindow = null
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
     }
