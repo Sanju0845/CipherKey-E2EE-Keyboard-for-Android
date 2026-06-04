@@ -66,15 +66,17 @@ class AiFloatingWindow(
 ) {
     private var floatingView: View? = null
 
-    // Simple lifecycle/state owners needed for ComposeView inside a plain View
-    private val lifecycleRegistry = LifecycleRegistry(object : LifecycleOwner {
-        override val lifecycle get() = lifecycleRegistry
-    })
-    private val viewModelStore = ViewModelStore()
+    // Concrete lifecycle owner — avoids the recursive self-reference problem
+    private val lifecycleOwner = object : LifecycleOwner {
+        val registry = LifecycleRegistry(this)
+        override val lifecycle: Lifecycle get() = registry
+    }
+    private val vmStore = ViewModelStore()
     private val savedStateController = SavedStateRegistryController.create(
         object : SavedStateRegistryOwner {
-            override val lifecycle get() = lifecycleRegistry
-            override val savedStateRegistry get() = savedStateController.savedStateRegistry
+            override val lifecycle: Lifecycle get() = lifecycleOwner.lifecycle
+            override val savedStateRegistry: SavedStateRegistry
+                get() = savedStateController.savedStateRegistry
         }
     )
 
@@ -82,20 +84,19 @@ class AiFloatingWindow(
         if (floatingView != null) return
 
         savedStateController.performRestore(null)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+        lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
         val composeView = ComposeView(context).apply {
-            setViewTreeLifecycleOwner(object : LifecycleOwner {
-                override val lifecycle get() = lifecycleRegistry
-            })
+            setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeViewModelStoreOwner(object : ViewModelStoreOwner {
-                override val viewModelStore get() = this@AiFloatingWindow.viewModelStore
+                override val viewModelStore get() = vmStore
             })
             setViewTreeSavedStateRegistryOwner(object : SavedStateRegistryOwner {
-                override val lifecycle get() = lifecycleRegistry
-                override val savedStateRegistry get() = savedStateController.savedStateRegistry
+                override val lifecycle: Lifecycle get() = lifecycleOwner.lifecycle
+                override val savedStateRegistry: SavedStateRegistry
+                    get() = savedStateController.savedStateRegistry
             })
             setContent {
                 MyApplicationTheme {
@@ -134,8 +135,8 @@ class AiFloatingWindow(
             try { windowManager.removeView(it) } catch (_: Exception) {}
             floatingView = null
         }
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+        lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         onDismiss()
     }
 
@@ -146,8 +147,8 @@ class AiFloatingWindow(
         AiWebViewHolder.webView?.destroy()
         AiWebViewHolder.webView = null
         AiWebViewHolder.isLoaded = false
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-        viewModelStore.clear()
+        lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        vmStore.clear()
     }
 }
 
