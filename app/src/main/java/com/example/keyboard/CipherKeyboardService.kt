@@ -14,6 +14,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -22,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -66,8 +69,9 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
     // Word prediction state
     private var wordSuggestions by mutableStateOf<List<String>>(emptyList())
 
-    // Which panel is showing: keyboard or clipboard
-    private var showClipboard by mutableStateOf(false)
+    // Which panel is showing: keyboard, clipboard or AI
+    private var activePanel by mutableStateOf(ActivePanel.KEYBOARD)
+    private var showPanelSelector by mutableStateOf(false)
 
     // Cover profile state
     private var coverProfile by mutableStateOf(com.example.cipher.CoverProfile.SYMBOLS)
@@ -89,7 +93,7 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
     }
 
     override fun onCreateInputView(): View {
-        // Ensure the Window DecorView propagates the view-tree lifecycle/dependencies so child view lookups never fail
+        // Ensure the Window DecorView propagates the view-tree lifecycle/dependencies
         window?.window?.decorView?.let { decorView ->
             decorView.setViewTreeLifecycleOwner(this@CipherKeyboardService)
             decorView.setViewTreeViewModelStoreOwner(this@CipherKeyboardService)
@@ -97,14 +101,10 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
         }
 
         val composeView = ComposeView(this).apply {
-            // Set disposal strategy tied to detaching from window since IMS is not destroyed with views
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-            
-            // Inject View tree bindings so that Jetpack Compose can boot smoothly inside IMS
             setViewTreeLifecycleOwner(this@CipherKeyboardService)
             setViewTreeViewModelStoreOwner(this@CipherKeyboardService)
             setViewTreeSavedStateRegistryOwner(this@CipherKeyboardService)
-            
             setContent {
                 MyApplicationTheme {
                     KeyboardAppContent()
@@ -116,34 +116,30 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
 
     @Composable
     fun KeyboardAppContent() {
-        LaunchedEffect(Unit) {
-            refreshClipboardEntries()
-        }
+        LaunchedEffect(Unit) { refreshClipboardEntries() }
 
-        // Capture keyboard height once so clipboard uses the same value
         var keyboardHeightPx by remember { mutableStateOf(0) }
+        val isClipboard = activePanel == ActivePanel.CLIPBOARD
+        val isAi = activePanel == ActivePanel.AI
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(ImmersiveBg)
-        ) {
-            // ── Always-visible strip ──────────────────────────────────────────
+        Column(modifier = Modifier.fillMaxWidth().background(ImmersiveBg)) {
+
+            // ── Strip ──────────────────────────────────────────────────────────
             KeyboardStrip(
-                suggestions = if (showClipboard) emptyList() else wordSuggestions,
+                suggestions = if (activePanel != ActivePanel.KEYBOARD) emptyList() else wordSuggestions,
                 onSuggestionClick = { handleSuggestionTap(it) },
                 isCipherModeOn = isCipherModeOn,
                 composingDraft = composingDraft,
-                showClipboard = showClipboard,
+                showClipboard = isClipboard,
+                activePanel = activePanel,
                 onToggleCipherMode = { isCipherModeOn = !isCipherModeOn },
                 onOpenClipboard = {
-                    if (!showClipboard) refreshClipboardEntries()
-                    showClipboard = !showClipboard
+                    showPanelSelector = !showPanelSelector
                 }
             )
 
-            // ── Profile picker (shown above keyboard when long-pressed 🔒) ────
-            if (showProfilePicker && !showClipboard) {
+            // ── Profile picker ────────────────────────────────────────────────
+            if (showProfilePicker && activePanel == ActivePanel.KEYBOARD) {
                 ProfilePickerSheet(
                     currentProfile = coverProfile,
                     onSelectProfile = { profile ->
@@ -153,14 +149,21 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                 )
             }
 
-            // ── Fixed-height container — prevents any layout jump ─────────────
-            // The keyboard is always composed (invisible when clipboard shows) so
-            // its height is always measured. Clipboard sits in the same Box at the
-            // same height. Crossfade swaps them with no resize.
-            Box(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Keyboard — always laid out so height is always known
+            // ── Panel selector grid ───────────────────────────────────────────
+            if (showPanelSelector) {
+                PanelSelector(
+                    currentPanel = activePanel,
+                    onSelectPanel = { panel ->
+                        if (panel == ActivePanel.CLIPBOARD) refreshClipboardEntries()
+                        activePanel = panel
+                        showPanelSelector = false
+                    }
+                )
+            }
+
+            // ── Main content area ─────────────────────────────────────────────
+            Box(modifier = Modifier.fillMaxWidth()) {
+                // Keyboard (always laid out, invisible when another panel shows)
                 KeyboardView(
                     activePage = activePage,
                     isCipherModeOn = isCipherModeOn,
@@ -184,42 +187,33 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                         .onGloballyPositioned { coords ->
                             if (coords.size.height > 0) keyboardHeightPx = coords.size.height
                         }
-                        .alpha(if (showClipboard) 0f else 1f)
+                        .alpha(if (activePanel == ActivePanel.KEYBOARD) 1f else 0f)
+                        .then(
+                            if (activePanel != ActivePanel.KEYBOARD)
+                                Modifier.pointerInput(Unit) {} else Modifier
+                        )
                 )
 
-                // Clipboard — overlaid at the same height, crossfades in/out
+                // Clipboard panel
                 androidx.compose.animation.AnimatedVisibility(
-                    visible = showClipboard,
+                    visible = isClipboard,
                     enter = fadeIn(tween(200)),
                     exit = fadeOut(tween(180))
                 ) {
                     val density = androidx.compose.ui.platform.LocalDensity.current
-                    val clipH = if (keyboardHeightPx > 0)
-                        with(density) { keyboardHeightPx.toDp() }
-                    else 240.dp
-
+                    val clipH = if (keyboardHeightPx > 0) with(density) { keyboardHeightPx.toDp() } else 240.dp
                     ClipboardPanel(
                         entries = clipboardEntries,
-                        onBackToKeyboard = { showClipboard = false },
-                        onPasteRaw = { text ->
-                            pasteIntoField(text)
-                            showClipboard = false
-                        },
+                        onBackToKeyboard = { activePanel = ActivePanel.KEYBOARD },
+                        onPasteRaw = { text -> pasteIntoField(text); activePanel = ActivePanel.KEYBOARD },
                         onEncryptAndPaste = { text ->
-                            val encrypted = CipherEngine.encrypt(applicationContext, text, useSymbols)
-                            pasteIntoField(encrypted)
-                            showClipboard = false
+                            pasteIntoField(CipherEngine.encrypt(applicationContext, text, useSymbols))
+                            activePanel = ActivePanel.KEYBOARD
                         },
-                        onDecryptAndPaste = { text ->
-                            pasteIntoField(text)
-                            showClipboard = false
-                        },
+                        onDecryptAndPaste = { text -> pasteIntoField(text); activePanel = ActivePanel.KEYBOARD },
                         onDecryptPreview = { text ->
-                            val result = CipherEngine.decryptWithIntegrity(applicationContext, text)
-                            DecryptPreviewResult(
-                                plaintext = result.plaintext ?: "",
-                                integrityOk = result.integrityOk
-                            )
+                            val r = CipherEngine.decryptWithIntegrity(applicationContext, text)
+                            DecryptPreviewResult(r.plaintext ?: "", r.integrityOk)
                         },
                         onDelete = { id ->
                             ClipboardStore.removeEntry(id)
@@ -227,6 +221,17 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                         },
                         modifier = Modifier.height(clipH)
                     )
+                }
+
+                // AI panel — WebView kept alive, conversation persists
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isAi,
+                    enter = fadeIn(tween(200)),
+                    exit = fadeOut(tween(180))
+                ) {
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val panelH = if (keyboardHeightPx > 0) with(density) { keyboardHeightPx.toDp() } else 240.dp
+                    AiPanel(modifier = Modifier.height(panelH))
                 }
             }
         }
@@ -266,7 +271,6 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                 return
             }
             val ic = currentInputConnection ?: return
-            // If there's a selection, delete it entirely
             val selectedText = ic.getSelectedText(0)
             if (!selectedText.isNullOrEmpty()) {
                 ic.commitText("", 1)
@@ -282,7 +286,6 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
     private fun handleDeleteWord() {
         try {
             if (isCipherModeOn && composingDraft.isNotEmpty()) {
-                // Delete last word in draft
                 val trimmed = composingDraft.trimEnd()
                 val lastSpace = trimmed.lastIndexOf(' ')
                 composingDraft = if (lastSpace >= 0) trimmed.substring(0, lastSpace + 1) else ""
@@ -291,7 +294,6 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
             val ic = currentInputConnection ?: return
             val before = ic.getTextBeforeCursor(200, 0)?.toString() ?: return
             if (before.isEmpty()) return
-            // Find how many chars to delete: trim trailing spaces then delete back to prev space
             val trimmed = before.trimEnd()
             val charsToDelete = if (trimmed.isEmpty()) {
                 before.length
@@ -346,13 +348,11 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
     private fun handleSuggestionTap(word: String) {
         try {
             val ic = currentInputConnection ?: return
-            // Delete the current partial word being typed
             val before = ic.getTextBeforeCursor(50, 0)?.toString() ?: ""
             val partialWord = before.takeLastWhile { it.isLetter() || it == '\'' }
             if (partialWord.isNotEmpty()) {
                 ic.deleteSurroundingText(partialWord.length, 0)
             }
-            // Commit the suggestion + space
             ic.commitText("$word ", 1)
             updateWordSuggestions()
         } catch (e: Exception) {
@@ -371,9 +371,7 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
                 return
             }
             val before = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
-            // Current partial word (letters being typed right now)
             val currentWord = before.takeLastWhile { it.isLetter() || it == '\'' }
-            // Last completed word (for bigram context)
             val beforeCurrent = before.dropLast(currentWord.length).trimEnd()
             val lastWord = beforeCurrent.takeLastWhile { it.isLetter() || it == '\'' }
             wordSuggestions = WordPredictor.predict(currentWord, lastWord)
@@ -395,7 +393,7 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
         var result = text
         var iterations = 0
         while (iterations++ < 50) {
-            val block = com.example.cipher.CipherDetector.extractExactVisualBlock(result) ?: break
+            val block = CipherDetector.extractExactVisualBlock(result) ?: break
             val plain = CipherEngine.decrypt(applicationContext, block) ?: break
             result = result.replace(block, plain)
         }
@@ -412,7 +410,8 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
         composingDraft = ""
         wordSuggestions = emptyList()
         clipboardEntries = emptyList()
-        showClipboard = false
+        activePanel = ActivePanel.KEYBOARD
+        showPanelSelector = false
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
@@ -424,7 +423,6 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
-        // Correctly tear down / pause the view tree lifecycle when input view finishes
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
     }

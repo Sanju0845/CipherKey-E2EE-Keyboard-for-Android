@@ -312,6 +312,7 @@ fun LongPressKey(
     longPressLabel: String,
     modifier: Modifier = Modifier,
     glideHighlight: Boolean = false,
+    showPopup: Boolean = true,   // set false for spacebar / special keys
     onTap: () -> Unit,
     onLongPress: () -> Unit
 ) {
@@ -332,8 +333,8 @@ fun LongPressKey(
     val bg = if (glideHighlight || pressed) KeyBgPressed else KeyBg
 
     Box(modifier = modifier.height(KeyHeight)) {
-        // Popup on press
-        if (pressed) {
+        // Popup on press (suppressed for keys like spacebar)
+        if (showPopup && pressed) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)

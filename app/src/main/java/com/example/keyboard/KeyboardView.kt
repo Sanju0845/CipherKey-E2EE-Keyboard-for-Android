@@ -224,6 +224,7 @@ fun KeyboardView(
                 label = "space",
                 longPressLabel = "⌨",
                 modifier = Modifier.weight(3.5f),
+                showPopup = false,
                 onTap = onSpace,
                 onLongPress = onSwitchKeyboard
             )
