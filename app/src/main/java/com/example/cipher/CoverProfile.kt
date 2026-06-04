@@ -25,7 +25,8 @@ enum class CoverProfile(
     SHOPPING("shopping", "Shopping", "🛒"),
     NOTES("notes", "Notes", "📝"),
     MOVIE("movie", "Movie Review", "🎬"),
-    TECH("tech", "Tech Log", "💻");
+    TECH("tech", "Tech Log", "💻"),
+    TANGLISH("tanglish", "Telugu-Eng", "🗣️");
 
     companion object {
         fun fromId(id: String) = entries.find { it.id == id } ?: SYMBOLS
@@ -42,12 +43,13 @@ object CoverEncoder {
      */
     fun encode(hexPayload: String, profile: CoverProfile): String {
         return when (profile) {
-            CoverProfile.SYMBOLS, CoverProfile.EMOJIS -> hexPayload // handled by UnicodeObfuscator
-            CoverProfile.CRICKET -> encodeCricket(hexPayload)
+            CoverProfile.SYMBOLS, CoverProfile.EMOJIS -> hexPayload
+            CoverProfile.CRICKET  -> encodeCricket(hexPayload)
             CoverProfile.SHOPPING -> encodeShopping(hexPayload)
-            CoverProfile.NOTES -> encodeNotes(hexPayload)
-            CoverProfile.MOVIE -> encodeMovie(hexPayload)
-            CoverProfile.TECH -> encodeTech(hexPayload)
+            CoverProfile.NOTES    -> encodeNotes(hexPayload)
+            CoverProfile.MOVIE    -> encodeMovie(hexPayload)
+            CoverProfile.TECH     -> encodeTech(hexPayload)
+            CoverProfile.TANGLISH -> encodeTanglish(hexPayload)
         }
     }
 
@@ -125,5 +127,45 @@ object CoverEncoder {
         val latency = Random.nextInt(20, 120)
         return "INFO $h:$m:$s Connection Stable  Response ${codes.random()}  Latency ${latency}ms" +
             "$MARKER$hex"
+    }
+
+    /**
+     * Tanglish cover — random casual Telugu-English chat phrases.
+     * Nothing to do with the real message. Just convincing chat filler.
+     * Examples: "bro nenu vellali ra", "yaar ikkade unna", "chill agu boss"
+     */
+    private fun encodeTanglish(hex: String): String {
+        val openers = listOf(
+            "bro", "yaar", "da", "maccha", "ra", "anna", "boss"
+        )
+        val middles = listOf(
+            "nenu cheppindi correct ga undhi",
+            "ikkade chuste baguntundi",
+            "okka second wait chey",
+            "nenu ready ga unna",
+            "konchem busy ga unna",
+            "chill agu tension paddaku",
+            "nenu just check chestha",
+            "inkevvariki cheppakku",
+            "malli cheptha okay na",
+            "tharvata matladu",
+            "ippudu kadu tarvata",
+            "nee choice bro",
+            "okay okay got it",
+            "are yaar no stress",
+            "same pinch me too",
+            "pakka confirm chestanu",
+            "nenu plan chestha okay",
+            "just chill mawa",
+            "kalisi matladu later",
+            "super idea ra nenu try chesta"
+        )
+        val closers = listOf(
+            "😂", "😅", "👍", "🔥", "💯", "lol", "haha", "okay ra",
+            "no issues", "done da", "sure boss", "👀", "😎", "bro"
+        )
+
+        val sentence = "${openers.random()} ${middles.random()} ${closers.random()}"
+        return "$sentence$MARKER$hex"
     }
 }
