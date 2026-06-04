@@ -456,9 +456,8 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
-        // Dismiss floating AI window when keyboard closes
-        aiFloatingWindow?.dismiss()
-        aiFloatingWindow = null
+        // Don't dismiss AI floating window here — it should survive keyboard view restarts.
+        // Only dismiss when the user explicitly taps ↓ or the service is destroyed.
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
     }
