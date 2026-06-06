@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  namespace = "com.singularitysoftware.encryptboard"
   compileSdk = 36
 
   defaultConfig {
-    applicationId = "com.example.cipherkey"
+    applicationId = "com.singularitysoftware.encryptboard"
     minSdk = 24
     targetSdk = 35
     versionCode = 9

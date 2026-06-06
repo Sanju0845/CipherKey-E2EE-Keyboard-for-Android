@@ -1,8 +1,8 @@
-package com.example
+package com.singularitysoftware.encryptboard
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.example.cipher.CipherEngine
+import com.singularitysoftware.encryptboard.cipher.CipherEngine
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test

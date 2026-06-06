@@ -53,7 +53,7 @@ jobs:
           echo "version_code=${VERSION_CODE}" >> $GITHUB_OUTPUT
           echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "release_tag=v${VERSION_NAME}" >> $GITHUB_OUTPUT
-          echo "release_name=CipherKey v${VERSION_NAME} (build ${VERSION_CODE})" >> $GITHUB_OUTPUT
+          echo "release_name=EncryptBoard v${VERSION_NAME} (build ${VERSION_CODE})" >> $GITHUB_OUTPUT
 
       # ── 4. Build APKs ────────────────────────────────────────────────────────
       - name: Build debug and release APKs
@@ -67,25 +67,25 @@ jobs:
 
           # Debug APK
           mv app/build/outputs/apk/debug/app-debug.apk \
-             app/build/outputs/apk/debug/CipherKey-v${VERSION}-debug.apk || true
+             app/build/outputs/apk/debug/EncryptBoard-v${VERSION}-debug.apk || true
 
           # Release APK (unsigned)
           mv app/build/outputs/apk/release/app-release-unsigned.apk \
-             app/build/outputs/apk/release/CipherKey-v${VERSION}-release-unsigned.apk 2>/dev/null || true
+             app/build/outputs/apk/release/EncryptBoard-v${VERSION}-release-unsigned.apk 2>/dev/null || true
           # Or signed release if signing config succeeded
           mv app/build/outputs/apk/release/app-release.apk \
-             app/build/outputs/apk/release/CipherKey-v${VERSION}-release.apk 2>/dev/null || true
+             app/build/outputs/apk/release/EncryptBoard-v${VERSION}-release.apk 2>/dev/null || true
 
       # ── 6. Zip debug + release together ──────────────────────────────────────
       - name: Create combined ZIP
         run: |
           VERSION="${{ steps.version.outputs.version_name }}"
           mkdir -p zip_output
-          cp app/build/outputs/apk/debug/CipherKey-v${VERSION}-debug.apk zip_output/ 2>/dev/null || true
-          cp app/build/outputs/apk/release/CipherKey-v${VERSION}-release-unsigned.apk zip_output/ 2>/dev/null || true
-          cp app/build/outputs/apk/release/CipherKey-v${VERSION}-release.apk zip_output/ 2>/dev/null || true
+          cp app/build/outputs/apk/debug/EncryptBoard-v${VERSION}-debug.apk zip_output/ 2>/dev/null || true
+          cp app/build/outputs/apk/release/EncryptBoard-v${VERSION}-release-unsigned.apk zip_output/ 2>/dev/null || true
+          cp app/build/outputs/apk/release/EncryptBoard-v${VERSION}-release.apk zip_output/ 2>/dev/null || true
           cd zip_output
-          zip -r ../CipherKey-v${VERSION}-all-apks.zip .
+          zip -r ../EncryptBoard-v${VERSION}-all-apks.zip .
           cd ..
           ls -lh *.zip
 
@@ -106,7 +106,7 @@ jobs:
           tag_name: ${{ steps.version.outputs.release_tag }}
           name: ${{ steps.version.outputs.release_name }}
           body: |
-            ## CipherKey ${{ steps.version.outputs.release_name }}
+            ## EncryptBoard ${{ steps.version.outputs.release_name }}
 
             **Commit:** `${{ steps.version.outputs.short_sha }}`
             **Build:** ${{ steps.version.outputs.version_code }}
@@ -118,19 +118,19 @@ jobs:
             ### Downloads
             | File | Description |
             |---|---|
-            | `CipherKey-v${{ steps.version.outputs.version_name }}-debug.apk` | Debug APK — install directly |
-            | `CipherKey-v${{ steps.version.outputs.version_name }}-release*.apk` | Release APK |
-            | `CipherKey-v${{ steps.version.outputs.version_name }}-all-apks.zip` | Both APKs zipped |
+            | `EncryptBoard-v${{ steps.version.outputs.version_name }}-debug.apk` | Debug APK — install directly |
+            | `EncryptBoard-v${{ steps.version.outputs.version_name }}-release*.apk` | Release APK |
+            | `EncryptBoard-v${{ steps.version.outputs.version_name }}-all-apks.zip` | Both APKs zipped |
 
             > **Install:** Enable "Install from unknown sources" in Android Settings, then open the debug APK.
           draft: false
           prerelease: false
           make_latest: true
           files: |
-            app/build/outputs/apk/debug/CipherKey-v${{ steps.version.outputs.version_name }}-debug.apk
-            app/build/outputs/apk/release/CipherKey-v${{ steps.version.outputs.version_name }}-release-unsigned.apk
-            app/build/outputs/apk/release/CipherKey-v${{ steps.version.outputs.version_name }}-release.apk
-            CipherKey-v${{ steps.version.outputs.version_name }}-all-apks.zip
+            app/build/outputs/apk/debug/EncryptBoard-v${{ steps.version.outputs.version_name }}-debug.apk
+            app/build/outputs/apk/release/EncryptBoard-v${{ steps.version.outputs.version_name }}-release-unsigned.apk
+            app/build/outputs/apk/release/EncryptBoard-v${{ steps.version.outputs.version_name }}-release.apk
+            EncryptBoard-v${{ steps.version.outputs.version_name }}-all-apks.zip
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

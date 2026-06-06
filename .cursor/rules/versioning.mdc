@@ -1,0 +1,30 @@
+---
+description: Bump app version on every push; semver rules for patch/minor/major
+alwaysApply: true
+---
+
+# CipherKey version bumps
+
+On **every push** that ships an update (bug fix or new feature), bump versions in `app/build.gradle.kts`:
+- `versionName` — user-facing semver string
+- `versionCode` — integer; **always +1** on every release (required for Android installs)
+
+Current baseline: `versionName = "1.0.0"`, `versionCode = 1` (normalize to three segments when bumping).
+
+## When to bump which digit
+
+| Change type | Example | Rule |
+|-------------|---------|------|
+| **Bug fix** on existing behavior | `1.1.0` → `1.1.1` | Patch: increment **last** number (`1.x.y` → `1.x.(y+1)`) |
+| **New feature** or notable addition | `1.1.0` → `1.2.0` | Minor: increment **middle** number (`1.x.y` → `1.(x+1).0`), reset patch to `0` |
+| **Major** release | `1.2.3` → `2.0.0` | Only when the user explicitly says to change the **first** number |
+
+Do **not** bump major (`x.0.0`) unless the user asks.
+
+## Before pushing
+
+1. Classify the change (bug fix vs new feature vs user-requested major).
+2. Update `versionName` and `versionCode` in `app/build.gradle.kts`.
+3. Mention the new version in the commit message or PR summary.
+
+If a push mixes bug fixes and features, use the **minor** bump (new feature wins).

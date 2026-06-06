@@ -16,13 +16,13 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.MyApplication">
+        android:theme="@style/Theme.EncryptBoard">
         <activity
-            android:name="com.example.MainActivity"
+            android:name="com.singularitysoftware.encryptboard.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:label="@string/app_name"
-            android:theme="@style/Theme.MyApplication">
+            android:theme="@style/Theme.EncryptBoard">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -31,17 +31,17 @@
         </activity>
 
         <activity
-            android:name="com.example.quick.QuickTranslateActivity"
+            android:name="com.singularitysoftware.encryptboard.quick.QuickTranslateActivity"
             android:exported="true"
             android:label="Quick translator"
-            android:theme="@style/Theme.MyApplication" />
+            android:theme="@style/Theme.EncryptBoard" />
 
         <!--
             Text Selection Actions — appear in the Copy/Cut/Paste toolbar when user selects text.
             Works in ANY app: WhatsApp, Telegram, Notes, Gmail, Browser, etc.
         -->
         <activity
-            android:name="com.example.quick.EncryptTextAction"
+            android:name="com.singularitysoftware.encryptboard.quick.EncryptTextAction"
             android:exported="true"
             android:label="🔒 Encrypt"
             android:theme="@android:style/Theme.NoDisplay">
@@ -53,7 +53,7 @@
         </activity>
 
         <activity
-            android:name="com.example.quick.DecryptTextAction"
+            android:name="com.singularitysoftware.encryptboard.quick.DecryptTextAction"
             android:exported="true"
             android:label="🔓 Decrypt"
             android:theme="@android:style/Theme.NoDisplay">
@@ -64,7 +64,7 @@
             </intent-filter>
         </activity>
         <service
-            android:name="com.example.quick.QuickBubbleService"
+            android:name="com.singularitysoftware.encryptboard.quick.QuickBubbleService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
@@ -73,11 +73,11 @@
         </service>
 
         <service
-            android:name="com.example.keyboard.CipherKeyboardService"
+            android:name="com.singularitysoftware.encryptboard.keyboard.CipherKeyboardService"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_INPUT_METHOD"
             android:exported="true"
-            android:theme="@style/Theme.MyApplication">
+            android:theme="@style/Theme.EncryptBoard">
             <intent-filter>
                 <action android:name="android.view.InputMethod" />
                 <category android:name="android.intent.category.DEFAULT" />

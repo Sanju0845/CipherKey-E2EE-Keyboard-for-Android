@@ -1,6 +1,6 @@
-package com.example
+package com.singularitysoftware.encryptboard
 
-import com.example.cipher.UnicodeObfuscator
+import com.singularitysoftware.encryptboard.cipher.UnicodeObfuscator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test

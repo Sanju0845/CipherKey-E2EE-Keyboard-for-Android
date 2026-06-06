@@ -1,9 +1,9 @@
-package com.example
+package com.singularitysoftware.encryptboard
 
-import com.example.cipher.CipherDetector
-import com.example.cipher.InvisibleCharInjector
-import com.example.cipher.SymbolMapper
-import com.example.cipher.UnicodeObfuscator
+import com.singularitysoftware.encryptboard.cipher.CipherDetector
+import com.singularitysoftware.encryptboard.cipher.InvisibleCharInjector
+import com.singularitysoftware.encryptboard.cipher.SymbolMapper
+import com.singularitysoftware.encryptboard.cipher.UnicodeObfuscator
 import org.junit.Assert.*
 import org.junit.Test
 

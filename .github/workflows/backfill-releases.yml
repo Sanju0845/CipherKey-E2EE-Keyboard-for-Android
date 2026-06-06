@@ -100,7 +100,7 @@ jobs:
             ./gradlew assembleDebug --no-daemon --quiet 2>&1 | tail -5 || { echo "Build failed for $TAG"; git checkout main -- 2>/dev/null; continue; }
 
             # Rename APK
-            DEBUG_APK="CipherKey-${TAG}-debug.apk"
+            DEBUG_APK="EncryptBoard-${TAG}-debug.apk"
             mv app/build/outputs/apk/debug/app-debug.apk "$DEBUG_APK" 2>/dev/null || \
               cp app/build/outputs/apk/debug/*.apk "$DEBUG_APK" 2>/dev/null || true
 
@@ -110,17 +110,17 @@ jobs:
 
             RELEASE_APK=""
             if ls app/build/outputs/apk/release/*.apk 1>/dev/null 2>&1; then
-              RELEASE_APK="CipherKey-${TAG}-release-unsigned.apk"
+              RELEASE_APK="EncryptBoard-${TAG}-release-unsigned.apk"
               cp app/build/outputs/apk/release/*.apk "$RELEASE_APK" 2>/dev/null || true
             fi
 
             # Create ZIP with both
-            ZIP_FILE="CipherKey-${TAG}-all-apks.zip"
+            ZIP_FILE="EncryptBoard-${TAG}-all-apks.zip"
             zip -j "$ZIP_FILE" "$DEBUG_APK" $RELEASE_APK 2>/dev/null || zip -j "$ZIP_FILE" "$DEBUG_APK"
             ls -lh "$DEBUG_APK" "$ZIP_FILE" 2>/dev/null
 
             # Create or update GitHub Release
-            BODY="## CipherKey ${TAG}
+            BODY="## EncryptBoard ${TAG}
 
 **Version:** ${VERSION_NAME} (build ${VERSION_CODE})
 **Tag date:** ${TAG_DATE}
@@ -161,7 +161,7 @@ ${COMMIT_MSG}
             else
               # Create new release
               gh release create "$TAG" \
-                --title "CipherKey ${TAG} (build ${VERSION_CODE})" \
+                --title "EncryptBoard ${TAG} (build ${VERSION_CODE})" \
                 --notes "$BODY" \
                 "$DEBUG_APK" \
                 "$ZIP_FILE" \
