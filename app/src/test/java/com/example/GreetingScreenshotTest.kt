@@ -21,7 +21,7 @@ class GreetingScreenshotTest {
 
   @Test
   fun greeting_screenshot() {
-    composeTestRule.setContent { EncryptBoardTheme { OnboardingScreen() } }
+    composeTestRule.setContent { EncryptBoardTheme { MainApp() } }
 
     composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/greeting.png")
   }

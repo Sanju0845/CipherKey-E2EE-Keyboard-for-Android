@@ -2,7 +2,7 @@ package com.singularitysoftware.encryptboard.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
-import com.singularitysoftware.encryptboard.OnboardingScreen
+import com.singularitysoftware.encryptboard.MainApp
 import com.singularitysoftware.encryptboard.ui.theme.EncryptBoardTheme
 import com.singularitysoftware.encryptboard.keyboard.KeyboardView
 import com.singularitysoftware.encryptboard.keyboard.KeyboardPage
@@ -12,7 +12,7 @@ import com.singularitysoftware.encryptboard.keyboard.KeyboardStrip
 @Composable
 fun Preview_OnboardingScreen() {
     EncryptBoardTheme {
-        OnboardingScreen()
+        MainApp()
     }
 }
 
