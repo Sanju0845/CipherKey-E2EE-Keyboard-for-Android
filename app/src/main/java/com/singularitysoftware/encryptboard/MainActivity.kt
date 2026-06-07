@@ -958,7 +958,52 @@ fun SettingsTab() {
             }
         }
 
+        // Legal footer
+        LegalFooter()
+
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+fun LegalFooter() {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Privacy Policy",
+            fontSize = 12.sp,
+            color = Slate500,
+            modifier = Modifier.clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://gist.github.com/Sanju0845/eddff5c3ff4adf6cfaad562e20cbe1c7"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+        )
+        Text("  ·  ", fontSize = 12.sp, color = Slate700)
+        Text(
+            text = "Terms & Conditions",
+            fontSize = 12.sp,
+            color = Slate500,
+            modifier = Modifier.clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://gist.github.com/Sanju0845/1763d661d41157fdb27441a588847d3b"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+        )
     }
 }
 
