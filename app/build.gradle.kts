@@ -14,21 +14,21 @@ android {
     applicationId = "com.singularitysoftware.encryptboard"
     minSdk = 24
     targetSdk = 35
-    versionCode = 9
-    versionName = "1.4.0"
+    versionCode = 1
+    versionName = "1.0.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/encryptboard-release.jks"
       val keystoreFile = file(keystorePath)
-      val storePass = System.getenv("STORE_PASSWORD")
-      if (keystoreFile.exists() && !storePass.isNullOrBlank()) {
+      val storePass = System.getenv("STORE_PASSWORD") ?: "encryptboard2026"
+      if (keystoreFile.exists()) {
         storeFile = keystoreFile
         storePassword = storePass
-        keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
+        keyAlias = System.getenv("KEY_ALIAS") ?: "encryptboard"
         keyPassword = System.getenv("KEY_PASSWORD") ?: storePass
       }
     }
@@ -39,10 +39,7 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      val releaseKeystore = signingConfigs.getByName("release").storeFile
-      if (releaseKeystore != null && releaseKeystore.exists()) {
-        signingConfig = signingConfigs.getByName("release")
-      }
+      signingConfig = signingConfigs.getByName("release")
     }
     debug {
       // Uses default Android debug keystore automatically
