@@ -1,0 +1,6 @@
+{
+  "name": "EncryptBoard",
+  "description": "A secure Android keyboard with built-in AES encryption and visual message obfuscation for any chat app.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

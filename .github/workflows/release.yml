@@ -1,0 +1,179 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── 2. Setup ─────────────────────────────────────────────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create local.properties
+        run: echo "sdk.dir=${ANDROID_HOME}" >> local.properties
+
+      - name: Grant execute permission for Gradle wrapper
+        run: chmod +x gradlew
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # ── 3. Generate keystore on runner ───────────────────────────────────────
+      - name: Generate release keystore
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          keytool -genkey -v \
+            -keystore eb-key.jks \
+            -alias encryptboard \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storetype JKS \
+            -storepass encryptboard2026 \
+            -keypass encryptboard2026 \
+            -dname "CN=Singularity Software, OU=EncryptBoard, O=Singularity Software, L=India, ST=India, C=IN"
+
+      # ── 4. Version info ───────────────────────────────────────────────────────
+      - name: Extract version info
+        id: version
+        run: |
+          VERSION_NAME=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          VERSION_CODE=$(grep 'versionCode' app/build.gradle.kts | head -1 | grep -o '[0-9]*')
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "version_name=${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "version_code=${VERSION_CODE}" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "release_tag=v${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "release_name=EncryptBoard v${VERSION_NAME} (build ${VERSION_CODE})" >> $GITHUB_OUTPUT
+
+      # ── 5. Build APK + AAB ────────────────────────────────────────────────────
+      - name: Build debug APK + release APK + release AAB
+        run: ./gradlew assembleDebug assembleRelease bundleRelease --no-daemon
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/eb-key.jks
+          STORE_PASSWORD: encryptboard2026
+          KEY_ALIAS: encryptboard
+          KEY_PASSWORD: encryptboard2026
+
+      # ── 6. Rename outputs ─────────────────────────────────────────────────────
+      - name: Rename APKs and AAB
+        run: |
+          VERSION="${{ steps.version.outputs.version_name }}"
+          # Debug APK
+          mv app/build/outputs/apk/debug/app-debug.apk \
+             app/build/outputs/apk/debug/EncryptBoard-v${VERSION}-debug.apk || true
+          # Release APK (signed or unsigned)
+          mv app/build/outputs/apk/release/app-release.apk \
+             app/build/outputs/apk/release/EncryptBoard-v${VERSION}-release.apk 2>/dev/null || true
+          mv app/build/outputs/apk/release/app-release-unsigned.apk \
+             app/build/outputs/apk/release/EncryptBoard-v${VERSION}-release-unsigned.apk 2>/dev/null || true
+          # AAB
+          mv app/build/outputs/bundle/release/app-release.aab \
+             app/build/outputs/bundle/release/EncryptBoard-v${VERSION}-release.aab || true
+
+      # ── 7. Upload artifacts ───────────────────────────────────────────────────
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: EncryptBoard-v${{ steps.version.outputs.version_name }}-debug
+          path: app/build/outputs/apk/debug/EncryptBoard-v${{ steps.version.outputs.version_name }}-debug.apk
+          retention-days: 30
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: EncryptBoard-v${{ steps.version.outputs.version_name }}-release-apk
+          path: app/build/outputs/apk/release/EncryptBoard-v${{ steps.version.outputs.version_name }}-release*.apk
+          retention-days: 30
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: EncryptBoard-v${{ steps.version.outputs.version_name }}-release-aab
+          path: app/build/outputs/bundle/release/EncryptBoard-v${{ steps.version.outputs.version_name }}-release.aab
+          retention-days: 30
+
+      # ── 8. GitHub Release (main only) ─────────────────────────────────────────
+      - name: Get commit message
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        id: commit
+        run: |
+          MSG=$(git log -1 --pretty=%B | head -5)
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create ZIP
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          VERSION="${{ steps.version.outputs.version_name }}"
+          mkdir -p zip_output
+          cp app/build/outputs/apk/debug/EncryptBoard-v${VERSION}-debug.apk zip_output/ 2>/dev/null || true
+          cp app/build/outputs/apk/release/EncryptBoard-v${VERSION}-release.apk zip_output/ 2>/dev/null || true
+          cp app/build/outputs/apk/release/EncryptBoard-v${VERSION}-release-unsigned.apk zip_output/ 2>/dev/null || true
+          cp app/build/outputs/bundle/release/EncryptBoard-v${VERSION}-release.aab zip_output/ 2>/dev/null || true
+          cd zip_output && zip -r ../EncryptBoard-v${VERSION}-all-builds.zip . && cd ..
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.release_tag }}
+          name: ${{ steps.version.outputs.release_name }}
+          body: |
+            ## EncryptBoard ${{ steps.version.outputs.release_name }}
+
+            **Commit:** `${{ steps.version.outputs.short_sha }}`
+            **Build:** ${{ steps.version.outputs.version_code }}
+
+            ### Changes
+            ${{ steps.commit.outputs.message }}
+
+            ---
+            | File | Description |
+            |---|---|
+            | `EncryptBoard-v${{ steps.version.outputs.version_name }}-debug.apk` | Debug APK — sideload directly |
+            | `EncryptBoard-v${{ steps.version.outputs.version_name }}-release.apk` | Signed Release APK |
+            | `EncryptBoard-v${{ steps.version.outputs.version_name }}-release.aab` | AAB — upload to Play Store |
+            | `EncryptBoard-v${{ steps.version.outputs.version_name }}-all-builds.zip` | All builds zipped |
+
+            > **Play Store:** Use the `.aab` file for submission.
+            > **Sideload:** Use the `-debug.apk` or `-release.apk`. Enable "Install from unknown sources" first.
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: |
+            app/build/outputs/apk/debug/EncryptBoard-v${{ steps.version.outputs.version_name }}-debug.apk
+            app/build/outputs/apk/release/EncryptBoard-v${{ steps.version.outputs.version_name }}-release.apk
+            app/build/outputs/apk/release/EncryptBoard-v${{ steps.version.outputs.version_name }}-release-unsigned.apk
+            app/build/outputs/bundle/release/EncryptBoard-v${{ steps.version.outputs.version_name }}-release.aab
+            EncryptBoard-v${{ steps.version.outputs.version_name }}-all-builds.zip
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

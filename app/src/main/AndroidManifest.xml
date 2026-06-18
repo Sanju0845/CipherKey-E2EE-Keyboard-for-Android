@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.EncryptBoard">
+        <activity
+            android:name="com.singularitysoftware.encryptboard.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.EncryptBoard">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name="com.singularitysoftware.encryptboard.quick.QuickTranslateActivity"
+            android:exported="true"
+            android:label="Quick translator"
+            android:theme="@style/Theme.EncryptBoard" />
+
+        <!--
+            Text Selection Actions — appear in the Copy/Cut/Paste toolbar when user selects text.
+            Works in ANY app: WhatsApp, Telegram, Notes, Gmail, Browser, etc.
+        -->
+        <activity
+            android:name="com.singularitysoftware.encryptboard.quick.EncryptTextAction"
+            android:exported="true"
+            android:label="🔒 Encrypt"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name="com.singularitysoftware.encryptboard.quick.DecryptTextAction"
+            android:exported="true"
+            android:label="🔓 Decrypt"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+        <service
+            android:name="com.singularitysoftware.encryptboard.quick.QuickBubbleService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Floating encrypt/decrypt bubble for chat apps" />
+        </service>
+
+        <service
+            android:name="com.singularitysoftware.encryptboard.keyboard.CipherKeyboardService"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true"
+            android:theme="@style/Theme.EncryptBoard">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+    </application>
+
+</manifest>
