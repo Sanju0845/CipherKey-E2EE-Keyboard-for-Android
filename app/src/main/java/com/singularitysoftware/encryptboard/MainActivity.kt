@@ -90,6 +90,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import coil.compose.rememberAsyncImagePainter
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 // ── Prefs key ─────────────────────────────────────────────────────────────────
 private const val PREFS_NAME = "encryptboard_prefs"
@@ -121,24 +125,29 @@ fun AppRoot() {
     }
 
     EncryptBoardTheme(darkTheme = isDark) {
-        if (!onboardingDone) {
-            OnboardingFlow {
-                prefs.edit().putBoolean(KEY_ONBOARDING_DONE, true).apply()
-                // Request overlay permission after onboarding
-                if (!Settings.canDrawOverlays(context)) {
-                    val intent = Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:${context.packageName}")
-                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(intent)
+        AnimatedContent(
+            targetState = onboardingDone,
+            transitionSpec = {
+                (fadeIn(animationSpec = tween(700, easing = LinearOutSlowInEasing)) + 
+                 scaleIn(initialScale = 1.05f, animationSpec = tween(700, easing = LinearOutSlowInEasing)))
+                    .togetherWith(
+                        fadeOut(animationSpec = tween(400, easing = FastOutLinearInEasing)) + 
+                        scaleOut(targetScale = 0.95f, animationSpec = tween(400, easing = FastOutLinearInEasing))
+                    )
+            },
+            label = "app_root_transition"
+        ) { done ->
+            if (!done) {
+                OnboardingFlow {
+                    prefs.edit().putBoolean(KEY_ONBOARDING_DONE, true).apply()
+                    onboardingDone = true
                 }
-                onboardingDone = true
+            } else {
+                MainApp(themeMode = themeMode, onThemeChange = { newMode ->
+                    CipherPrefs.setThemeMode(context, newMode)
+                    themeMode = newMode
+                })
             }
-        } else {
-            MainApp(themeMode = themeMode, onThemeChange = { newMode ->
-                CipherPrefs.setThemeMode(context, newMode)
-                themeMode = newMode
-            })
         }
     }
 }
@@ -352,115 +361,151 @@ fun OnboardingIllustration(pageIndex: Int, accent: Color) {
 
 @Composable
 fun OnboardingFlow(onFinish: () -> Unit) {
-    var page by remember { mutableIntStateOf(0) }
-    val current = onboardPages[page]
+    val pagerState = rememberPagerState(pageCount = { onboardPages.size })
+    val coroutineScope = rememberCoroutineScope()
+    val current = onboardPages[pagerState.currentPage]
+
+    val animatedAccentColor by animateColorAsState(
+        targetValue = current.accent,
+        animationSpec = tween(500),
+        label = "glow_color"
+    )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(ImmersiveBg)
     ) {
-        // Glow blob behind emoji representation
-        Box(
-            modifier = Modifier
-                .size(320.dp)
-                .align(Alignment.TopCenter)
-                .offset(y = 80.dp)
-                .blur(90.dp)
-                .background(current.accent.copy(alpha = 0.18f), CircleShape)
-        )
+        // Top-Right Skip Button using safe status bar padding
+        if (pagerState.currentPage < onboardPages.size - 1) {
+            TextButton(
+                onClick = onFinish,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 12.dp, end = 16.dp)
+            ) {
+                Text(
+                    text = "Skip",
+                    color = Slate500,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
 
+        // HorizontalPager spanning the screen, centering items vertically on any device
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { pageIndex ->
+            val pg = onboardPages[pageIndex]
+
+            // Calculate current swipe offset fraction for sleek custom parallax & transform animations
+            val pageOffset = ((pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction)
+            val absOffset = kotlin.math.abs(pageOffset)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 32.dp)
+                    .graphicsLayer {
+                        // Advanced scale & fade transitions matching swipe velocity
+                        val scale = 1.0f - (absOffset * 0.15f).coerceIn(0f, 0.15f)
+                        val alpha = 1.0f - (absOffset * 0.85f).coerceIn(0f, 1.0f)
+                        scaleX = scale
+                        scaleY = scale
+                        this.alpha = alpha
+                        
+                        // Subtle horizontal parallax movement
+                        translationX = pageOffset * size.width * 0.18f
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Pulsing custom-drawn technical vector illustration
+                    OnboardingIllustration(pageIndex = pageIndex, accent = pg.accent)
+
+                    Spacer(Modifier.height(40.dp))
+
+                    Text(
+                        text = pg.title,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Slate100,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 34.sp
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Text(
+                        text = pg.subtitle,
+                        fontSize = 15.sp,
+                        color = Slate400,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp
+                    )
+                }
+            }
+        }
+
+        // Bottom static layout: indicators & premium navigation controls
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 32.dp)
-                .padding(top = 100.dp, bottom = 48.dp),
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 36.dp, start = 32.dp, end = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.spacedBy(28.dp)
         ) {
-            // Top: custom illustration + text
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                AnimatedContent(
-                    targetState = page,
-                    transitionSpec = {
-                        fadeIn(tween(400)) + slideInHorizontally { it / 3 } togetherWith
-                        fadeOut(tween(200)) + slideOutHorizontally { -it / 3 }
-                    }, label = "page"
-                ) { p ->
-                    val pg = onboardPages[p]
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // High-tech onboarding illustration instead of basic emojis
-                        OnboardingIllustration(pageIndex = p, accent = pg.accent)
-
-                        Spacer(Modifier.height(44.dp))
-
-                        Text(
-                            text = pg.title,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Slate100,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 34.sp
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Text(
-                            text = pg.subtitle,
-                            fontSize = 15.sp,
-                            color = Slate400,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 22.sp
-                        )
-                    }
+            // Elegant linear navigation page indicators
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                onboardPages.forEachIndexed { i, _ ->
+                    val isActive = i == pagerState.currentPage
+                    Box(
+                        modifier = Modifier
+                            .height(6.dp)
+                            .width(if (isActive) 24.dp else 6.dp)
+                            .clip(CircleShape)
+                            .background(if (isActive) animatedAccentColor else Slate700)
+                    )
                 }
             }
 
-            // Bottom: dots + button
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(28.dp)
+            // High-contrast, stylish pill-shaped CTA button
+            Button(
+                onClick = {
+                    if (pagerState.currentPage < onboardPages.size - 1) {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                        }
+                    } else {
+                        onFinish()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(28.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = animatedAccentColor,
+                    contentColor = Color.Black
+                ),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
             ) {
-                // Page dots
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    onboardPages.forEachIndexed { i, _ ->
-                        val isActive = i == page
-                        Box(
-                            modifier = Modifier
-                                .height(6.dp)
-                                .width(if (isActive) 24.dp else 6.dp)
-                                .clip(CircleShape)
-                                .background(if (isActive) current.accent else Slate700)
-                        )
-                    }
-                }
-
-                // CTA button
-                Button(
-                    onClick = {
-                        if (page < onboardPages.size - 1) page++ else onFinish()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = current.accent,
-                        contentColor = Color.Black
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
-                ) {
-                    Text(
-                        text = if (page < onboardPages.size - 1) "Continue" else "Get Started",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Skip
-                if (page < onboardPages.size - 1) {
-                    TextButton(onClick = onFinish) {
-                        Text("Skip", color = Slate500, fontSize = 13.sp)
-                    }
-                }
+                Text(
+                    text = if (pagerState.currentPage < onboardPages.size - 1) "Continue" else "Get Started",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
@@ -716,6 +761,86 @@ fun NavPill(tab: NavTab, isActive: Boolean, onClick: () -> Unit) {
     }
 }
 
+@Composable
+fun SetupPermissionItem(
+    title: String,
+    description: String,
+    isCompleted: Boolean,
+    onClick: () -> Unit
+) {
+    val completedGreen = Color(0xFF10B981)
+    val pendingRed = Color(0xFFEF4444)
+    
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xE6081218)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.2.dp,
+                color = if (isCompleted) completedGreen.copy(alpha = 0.25f) else pendingRed.copy(alpha = 0.25f),
+                shape = RoundedCornerShape(16.dp)
+            )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(if (isCompleted) completedGreen else pendingRed, CircleShape)
+                    )
+                    Text(
+                        text = title,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Slate100
+                    )
+                }
+                Text(
+                    text = description,
+                    fontSize = 11.sp,
+                    color = Slate500,
+                    lineHeight = 15.sp
+                )
+            }
+            
+            Spacer(Modifier.width(16.dp))
+            
+            Button(
+                onClick = onClick,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isCompleted) completedGreen.copy(alpha = 0.12f) else pendingRed.copy(alpha = 0.12f),
+                    contentColor = if (isCompleted) completedGreen else pendingRed
+                ),
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (isCompleted) completedGreen.copy(alpha = 0.4f) else pendingRed.copy(alpha = 0.4f)),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                modifier = Modifier.height(34.dp)
+            ) {
+                Text(
+                    text = if (isCompleted) "✓ COMPLETED" else "⚠ PENDING",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.5.sp
+                )
+            }
+        }
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HOME TAB
 // ─────────────────────────────────────────────────────────────────────────────
@@ -730,6 +855,7 @@ fun HomeTab(
     val context = LocalContext.current
     var isEnabled by remember { mutableStateOf(false) }
     var isSelected by remember { mutableStateOf(false) }
+    var hasOverlay by remember { mutableStateOf(false) }
     var showSecurityPolicy by remember { mutableStateOf(false) }
     val isReady = isEnabled && isSelected
 
@@ -739,6 +865,7 @@ fun HomeTab(
             if (event == Lifecycle.Event.ON_RESUME) {
                 isEnabled = isKeyboardEnabled(context)
                 isSelected = isKeyboardSelected(context)
+                hasOverlay = Settings.canDrawOverlays(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -916,152 +1043,51 @@ fun HomeTab(
                 }
             }
 
-            // ── GET STARTED IN 3 STEPS ────────────────────────────────────────
+            // ── SYSTEM CONFIGURATION STEPS ────────────────────────────────────
             Text(
-                "GET STARTED IN 3 STEPS",
+                "SYSTEM CONFIGURATION STEPS",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = Slate500,
                 letterSpacing = 1.5.sp
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Step 1
-                StepMiniCard(
-                    number = "1",
-                    title = "Enable Keyboard",
-                    subtitle = "Allow EncryptBoard in settings",
-                    isCompleted = isEnabled,
-                    accentColor = ImmersiveCyan,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        }
-                    },
-                    iconDraw = {
-                        Canvas(modifier = Modifier.size(24.dp)) {
-                            val accentColorColor = ImmersiveCyan
-                            drawRoundRect(
-                                color = accentColorColor,
-                                topLeft = Offset(0f, 4.dp.toPx()),
-                                size = Size(size.width, size.height - 8f),
-                                cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
-                                style = Stroke(width = 2.dp.toPx())
-                            )
-                            val y1 = size.height * 0.45f
-                            val y2 = size.height * 0.7f
-                            drawLine(color = accentColorColor.copy(alpha = 0.5f), start = Offset(2.dp.toPx(), y1), end = Offset(size.width - 2.dp.toPx(), y1), strokeWidth = 1.5.dp.toPx())
-                            drawLine(color = accentColorColor.copy(alpha = 0.5f), start = Offset(2.dp.toPx(), y2), end = Offset(size.width - 2.dp.toPx(), y2), strokeWidth = 1.5.dp.toPx())
-                            val w = size.width
-                            drawLine(color = accentColorColor.copy(alpha = 0.5f), start = Offset(w * 0.25f, y1), end = Offset(w * 0.25f, y2), strokeWidth = 1.5.dp.toPx())
-                            drawLine(color = accentColorColor.copy(alpha = 0.5f), start = Offset(w * 0.5f, y1), end = Offset(w * 0.5f, y2), strokeWidth = 1.5.dp.toPx())
-                            drawLine(color = accentColorColor.copy(alpha = 0.5f), start = Offset(w * 0.75f, y1), end = Offset(w * 0.75f, y2), strokeWidth = 1.5.dp.toPx())
-                            val spaceY = size.height * 0.75f
-                            drawRoundRect(
-                                color = accentColorColor,
-                                topLeft = Offset(w * 0.3f, spaceY + 1.dp.toPx()),
-                                size = Size(w * 0.4f, 3.dp.toPx()),
-                                cornerRadius = CornerRadius(1.dp.toPx(), 1.dp.toPx())
-                            )
-                        }
+            SetupPermissionItem(
+                title = "1. Enable Keyboard",
+                description = "Activate EncryptBoard inside languages and input in your system parameters.",
+                isCompleted = isEnabled,
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
                     }
-                )
-                // Step 2
-                StepMiniCard(
-                    number = "2",
-                    title = "Set Passphrase",
-                    subtitle = "Create a strong AES key",
-                    isCompleted = !com.singularitysoftware.encryptboard.cipher.CipherEngine.isUsingDefaultPassphrase(context),
-                    accentColor = ImmersiveIndigo,
-                    modifier = Modifier.weight(1f),
-                    onClick = onNavigateToSettings,
-                    iconDraw = {
-                        Canvas(modifier = Modifier.size(24.dp)) {
-                            val accentColorColor = ImmersiveIndigo
-                            val r = 6.dp.toPx()
-                            val cx = 8.dp.toPx()
-                            val cy = 12.dp.toPx()
-                            drawCircle(
-                                color = accentColorColor,
-                                radius = r,
-                                center = Offset(cx, cy),
-                                style = Stroke(width = 2.dp.toPx())
-                            )
-                            drawCircle(
-                                color = accentColorColor.copy(alpha = 0.4f),
-                                radius = 2.dp.toPx(),
-                                center = Offset(cx, cy)
-                            )
-                            drawLine(
-                                color = accentColorColor,
-                                start = Offset(cx + r, cy),
-                                end = Offset(size.width, cy),
-                                strokeWidth = 2.dp.toPx()
-                            )
-                            drawLine(
-                                color = accentColorColor,
-                                start = Offset(size.width - 4.dp.toPx(), cy),
-                                end = Offset(size.width - 4.dp.toPx(), cy + 4.dp.toPx()),
-                                strokeWidth = 2.dp.toPx()
-                            )
-                            drawLine(
-                                color = accentColorColor,
-                                start = Offset(size.width - 8.dp.toPx(), cy),
-                                end = Offset(size.width - 8.dp.toPx(), cy + 4.dp.toPx()),
-                                strokeWidth = 2.dp.toPx()
-                            )
-                        }
+                }
+            )
+
+            SetupPermissionItem(
+                title = "2. Turn On Keyboard",
+                description = "Select and set EncryptBoard as your primary active typing input method.",
+                isCompleted = isSelected,
+                onClick = {
+                    runCatching {
+                        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                        imm?.showInputMethodPicker()
                     }
-                )
-                // Step 3
-                StepMiniCard(
-                    number = "3",
-                    title = "Start Typing",
-                    subtitle = "Instantly secure your chat",
-                    isCompleted = isSelected,
-                    accentColor = Color(0xFF8B5CF6),
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        runCatching {
-                            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                            imm?.showInputMethodPicker()
-                        }
-                    },
-                    iconDraw = {
-                        Canvas(modifier = Modifier.size(24.dp)) {
-                            val accentColorColor = Color(0xFF8B5CF6)
-                            drawRoundRect(
-                                color = accentColorColor,
-                                topLeft = Offset(2.dp.toPx(), 4.dp.toPx()),
-                                size = Size(size.width - 4.dp.toPx(), size.height - 10.dp.toPx()),
-                                cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
-                                style = Stroke(width = 2.dp.toPx())
-                            )
-                            val path = Path().apply {
-                                moveTo(6.dp.toPx(), size.height - 6.dp.toPx())
-                                lineTo(6.dp.toPx(), size.height)
-                                lineTo(12.dp.toPx(), size.height - 6.dp.toPx())
-                                close()
-                            }
-                            drawPath(
-                                path = path,
-                                color = accentColorColor
-                            )
-                            val y1 = 8.dp.toPx()
-                            val y2 = 12.dp.toPx()
-                            drawLine(color = accentColorColor.copy(alpha = 0.5f), start = Offset(6.dp.toPx(), y1), end = Offset(size.width - 8.dp.toPx(), y1), strokeWidth = 2.dp.toPx())
-                            drawLine(color = accentColorColor.copy(alpha = 0.5f), start = Offset(6.dp.toPx(), y2), end = Offset(size.width - 12.dp.toPx(), y2), strokeWidth = 2.dp.toPx())
-                        }
+                }
+            )
+
+            SetupPermissionItem(
+                title = "3. Display Over Other Apps",
+                description = "Grant floating overlay access to draw the live secure bubbles above chat clients.",
+                isCompleted = hasOverlay,
+                onClick = {
+                    runCatching {
+                        QuickBubbleService.requestOverlayPermission(context)
                     }
-                )
-            }
+                }
+            )
 
             // ── OPEN ENCRYPTBOARD CTA ─────────────────────────────────────────
             Button(

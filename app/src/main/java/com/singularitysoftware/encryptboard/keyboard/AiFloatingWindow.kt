@@ -15,12 +15,13 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,6 +73,7 @@ class AiFloatingWindow(
     private val lifecycleOwner = FloatingLifecycleOwner()
     private val savedStateOwner = FloatingSavedStateOwner(lifecycleOwner)
     private val vmStore = ViewModelStore()
+    private var isFocusable = true // Start focusable by default so they can type immediately
 
     fun show() {
         if (floatingView != null) return
@@ -81,19 +83,7 @@ class AiFloatingWindow(
         lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
-        val composeView = ComposeView(context).apply {
-            setViewTreeLifecycleOwner(lifecycleOwner)
-            setViewTreeViewModelStoreOwner(object : ViewModelStoreOwner {
-                override val viewModelStore: ViewModelStore get() = vmStore
-            })
-            setViewTreeSavedStateRegistryOwner(savedStateOwner)
-            setContent {
-                EncryptBoardTheme {
-                    AiFloatingContent(onDismiss = { dismiss() })
-                }
-            }
-        }
-
+        val composeView = ComposeView(context)
         floatingView = composeView
 
         val params = WindowManager.LayoutParams(
@@ -103,14 +93,49 @@ class AiFloatingWindow(
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else
                 @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
-            // NOT_FOCUSABLE = window can't steal focus from keyboard
-            // NOT_TOUCH_MODAL = touches outside pass through
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
+            // FLAG_HARDWARE_ACCELERATED ensures smooth, buttery transitions and eliminates typing lag!
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.BOTTOM
+            gravity = Gravity.TOP
+            y = (50 * context.resources.displayMetrics.density).toInt()
+        }
+
+        fun updateFocus(enabled: Boolean) {
+            val view = floatingView ?: return
+            val lp = view.layoutParams as? WindowManager.LayoutParams ?: return
+            isFocusable = enabled
+            if (enabled) {
+                lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            } else {
+                lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            }
+            try {
+                windowManager.updateViewLayout(view, lp)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        composeView.apply {
+            setViewTreeLifecycleOwner(lifecycleOwner)
+            setViewTreeViewModelStoreOwner(object : ViewModelStoreOwner {
+                override val viewModelStore: ViewModelStore get() = vmStore
+            })
+            setViewTreeSavedStateRegistryOwner(savedStateOwner)
+            setContent {
+                EncryptBoardTheme {
+                    AiFloatingContent(
+                        onDismiss = { dismiss() },
+                        isInitiallyFocusable = isFocusable,
+                        onFocusToggle = { focusable ->
+                            updateFocus(focusable)
+                        }
+                    )
+                }
+            }
         }
 
         try {
@@ -142,9 +167,15 @@ class AiFloatingWindow(
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
+@SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
-private fun AiFloatingContent(onDismiss: () -> Unit) {
+private fun AiFloatingContent(
+    onDismiss: () -> Unit,
+    isInitiallyFocusable: Boolean,
+    onFocusToggle: (Boolean) -> Unit
+) {
+    var isKeyboardFocusActive by remember { mutableStateOf(isInitiallyFocusable) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -156,22 +187,57 @@ private fun AiFloatingContent(onDismiss: () -> Unit) {
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color(0xFF0F1117))
         ) {
-            // Header
+            // Header with status indicator & mode selector
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFF161B22))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("✦", fontSize = 14.sp, color = ImmersiveCyan)
-                    Text("ChatGPT", color = Slate200, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("✦", fontSize = 14.sp, color = ImmersiveCyan)
+                        Text("ChatGPT", color = Slate200, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    // Keyboard Focus Status Badge (Toggles Window Focus so they can swap between ChatGPT & back app seamlessly)
+                    val badgeColor = if (isKeyboardFocusActive) ImmersiveCyan else Slate500
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(badgeColor.copy(alpha = 0.12f))
+                            .border(1.dp, badgeColor.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+                            .clickable {
+                                isKeyboardFocusActive = !isKeyboardFocusActive
+                                onFocusToggle(isKeyboardFocusActive)
+                            }
+                            .padding(horizontal = 7.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(badgeColor, CircleShape)
+                        )
+                        Text(
+                            text = if (isKeyboardFocusActive) "FOCUS: ACTIVE (TYPE HERE)" else "FOCUS: PASS-THROUGH",
+                            color = if (isKeyboardFocusActive) Slate100 else Slate400,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
                 }
+
                 Box(
                     modifier = Modifier
                         .size(28.dp)
@@ -188,16 +254,20 @@ private fun AiFloatingContent(onDismiss: () -> Unit) {
                 }
             }
 
-            // WebView — 280dp
+            // WebView with forced hardware acceleration & tactile page interaction focus hooks
             AndroidView(
                 factory = { ctx ->
                     AiWebViewHolder.webView ?: WebView(ctx).also { wv ->
                         AiWebViewHolder.webView = wv
+                        
+                        // Force hardware layer for high-speed butter-smooth rendering & absolute zero typing lag
+                        wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                        
                         wv.settings.apply {
                             javaScriptEnabled = true
                             domStorageEnabled = true
                             databaseEnabled = true
-                            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK  // use cache when available
+                            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
                             javaScriptCanOpenWindowsAutomatically = true
                             mediaPlaybackRequiresUserGesture = false
                             setSupportZoom(false)
@@ -209,11 +279,16 @@ private fun AiFloatingContent(onDismiss: () -> Unit) {
                             userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 8) " +
                                 "AppleWebKit/537.36 (KHTML, like Gecko) " +
                                 "Chrome/124.0.0.0 Mobile Safari/537.36"
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                offscreenPreRaster = true
+                            }
                         }
+
                         CookieManager.getInstance().apply {
                             setAcceptCookie(true)
                             setAcceptThirdPartyCookies(wv, true)
                         }
+
                         wv.webViewClient = object : WebViewClient() {
                             override fun onPageFinished(view: WebView, url: String) {
                                 super.onPageFinished(view, url)
@@ -221,7 +296,18 @@ private fun AiFloatingContent(onDismiss: () -> Unit) {
                                 CookieManager.getInstance().flush()
                             }
                         }
+
                         wv.webChromeClient = WebChromeClient()
+
+                        // Automatically focus the window when the user touches anywhere inside the web view
+                        wv.setOnTouchListener { _, event ->
+                            if (!isKeyboardFocusActive && event.action == android.view.MotionEvent.ACTION_DOWN) {
+                                isKeyboardFocusActive = true
+                                onFocusToggle(true)
+                            }
+                            false
+                        }
+
                         if (!AiWebViewHolder.isLoaded) wv.loadUrl(AI_URL)
                     }
                 },
