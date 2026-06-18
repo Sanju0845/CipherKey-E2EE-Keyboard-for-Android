@@ -47,6 +47,120 @@ private const val AI_URL = "https://chatgpt.com"
 object AiWebViewHolder {
     var webView: WebView? = null
     var isLoaded = false
+    var isKeyboardFocusActive = true // By default, intercept custom keyboard keys to type into ChatGPT
+
+    fun injectTextToActiveElement(text: String) {
+        val wv = webView ?: return
+        val escaped = text.replace("\\", "\\\\")
+            .replace("'", "\\'")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+        val js = """
+            (function() {
+                var el = document.activeElement;
+                if (!el) return;
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                    var start = el.selectionStart;
+                    var end = el.selectionEnd;
+                    var val = el.value;
+                    el.value = val.substring(0, start) + '$escaped' + val.substring(end);
+                    el.selectionStart = el.selectionEnd = start + ${escaped.length};
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                } else if (el.isContentEditable) {
+                    var sel = window.getSelection();
+                    if (sel.rangeCount > 0) {
+                        var range = sel.getRangeAt(0);
+                        range.deleteContents();
+                        var textNode = document.createTextNode('$escaped');
+                        range.insertNode(textNode);
+                        range.setStartAfter(textNode);
+                        range.setEndAfter(textNode);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    } else {
+                        el.innerText += '$escaped';
+                    }
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            })();
+        """.trimIndent()
+        wv.post {
+            wv.evaluateJavascript(js, null)
+        }
+    }
+
+    fun deleteCharFromActiveElement() {
+        val wv = webView ?: return
+        val js = """
+            (function() {
+                var el = document.activeElement;
+                if (!el) return;
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                    var start = el.selectionStart;
+                    var end = el.selectionEnd;
+                    var val = el.value;
+                    if (start === end) {
+                        if (start > 0) {
+                            el.value = val.substring(0, start - 1) + val.substring(end);
+                            el.selectionStart = el.selectionEnd = start - 1;
+                        }
+                    } else {
+                        el.value = val.substring(0, start) + val.substring(end);
+                        el.selectionStart = el.selectionEnd = start;
+                    }
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                } else if (el.isContentEditable) {
+                    var sel = window.getSelection();
+                    if (sel.rangeCount > 0) {
+                        var range = sel.getRangeAt(0);
+                        if (range.collapsed) {
+                            document.execCommand('delete', false, null);
+                        } else {
+                            range.deleteContents();
+                        }
+                    } else {
+                        document.execCommand('delete', false, null);
+                    }
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            })();
+        """.trimIndent()
+        wv.post {
+            wv.evaluateJavascript(js, null)
+        }
+    }
+
+    fun submitActiveElement() {
+        val wv = webView ?: return
+        val js = """
+            (function() {
+                var el = document.activeElement;
+                if (!el) return;
+                
+                // Fire Enter keyboard events
+                var kdown = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true });
+                el.dispatchEvent(kdown);
+                
+                var kup = new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true });
+                el.dispatchEvent(kup);
+
+                // Fallback: search for chatgpt's send button
+                var buttons = document.querySelectorAll('button');
+                for (var i = 0; i < buttons.length; i++) {
+                    var btn = buttons[i];
+                    if (btn.getAttribute('data-testid') === 'send-button' || (btn.querySelector('svg') && btn.innerText === '')) {
+                        btn.click();
+                        break;
+                    }
+                }
+            })();
+        """.trimIndent()
+        wv.post {
+            wv.evaluateJavascript(js, null)
+        }
+    }
 }
 
 // Standalone owners that don't reference themselves
@@ -100,7 +214,7 @@ class AiFloatingWindow(
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP
-            y = (50 * context.resources.displayMetrics.density).toInt()
+            y = (90 * context.resources.displayMetrics.density).toInt()
         }
 
         fun updateFocus(enabled: Boolean) {
@@ -174,7 +288,7 @@ private fun AiFloatingContent(
     isInitiallyFocusable: Boolean,
     onFocusToggle: (Boolean) -> Unit
 ) {
-    var isKeyboardFocusActive by remember { mutableStateOf(isInitiallyFocusable) }
+    var isKeyboardFocusActive by remember { mutableStateOf(AiWebViewHolder.isKeyboardFocusActive) }
 
     Column(
         modifier = Modifier
@@ -217,8 +331,9 @@ private fun AiFloatingContent(
                             .border(1.dp, badgeColor.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
                             .clickable {
                                 isKeyboardFocusActive = !isKeyboardFocusActive
+                                AiWebViewHolder.isKeyboardFocusActive = isKeyboardFocusActive
                                 onFocusToggle(isKeyboardFocusActive)
-                            }
+                             }
                             .padding(horizontal = 7.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -303,6 +418,7 @@ private fun AiFloatingContent(
                         wv.setOnTouchListener { _, event ->
                             if (!isKeyboardFocusActive && event.action == android.view.MotionEvent.ACTION_DOWN) {
                                 isKeyboardFocusActive = true
+                                AiWebViewHolder.isKeyboardFocusActive = true
                                 onFocusToggle(true)
                             }
                             false

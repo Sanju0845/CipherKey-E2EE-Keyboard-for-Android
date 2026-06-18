@@ -304,6 +304,10 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
 
     private fun handleKeyPress(key: String) {
         try {
+            if (activePanel == ActivePanel.AI && AiWebViewHolder.isKeyboardFocusActive) {
+                AiWebViewHolder.injectTextToActiveElement(key)
+                return
+            }
             if (isCipherModeOn) {
                 composingDraft += key
             } else {
@@ -318,6 +322,10 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
     private fun handleGlideWord(word: String) {
         if (word.isEmpty()) return
         try {
+            if (activePanel == ActivePanel.AI && AiWebViewHolder.isKeyboardFocusActive) {
+                AiWebViewHolder.injectTextToActiveElement(word)
+                return
+            }
             if (isCipherModeOn) {
                 composingDraft += word
             } else {
@@ -331,6 +339,10 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
 
     private fun handleBackspace() {
         try {
+            if (activePanel == ActivePanel.AI && AiWebViewHolder.isKeyboardFocusActive) {
+                AiWebViewHolder.deleteCharFromActiveElement()
+                return
+            }
             if (isCipherModeOn && composingDraft.isNotEmpty()) {
                 composingDraft = composingDraft.dropLast(1)
                 return
@@ -376,6 +388,10 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
 
     private fun handleSpace() {
         try {
+            if (activePanel == ActivePanel.AI && AiWebViewHolder.isKeyboardFocusActive) {
+                AiWebViewHolder.injectTextToActiveElement(" ")
+                return
+            }
             if (isCipherModeOn) {
                 // Space just adds to draft — don't encrypt yet, wait for Enter
                 composingDraft += " "
@@ -390,6 +406,10 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
 
     private fun handleEnter() {
         try {
+            if (activePanel == ActivePanel.AI && AiWebViewHolder.isKeyboardFocusActive) {
+                AiWebViewHolder.submitActiveElement()
+                return
+            }
             if (isCipherModeOn) {
                 if (composingDraft.isNotEmpty()) {
                     // Encrypt the entire sentence at once on Enter
@@ -411,6 +431,10 @@ class CipherKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSto
 
     private fun handleSuggestionTap(word: String) {
         try {
+            if (activePanel == ActivePanel.AI && AiWebViewHolder.isKeyboardFocusActive) {
+                AiWebViewHolder.injectTextToActiveElement("$word ")
+                return
+            }
             val ic = currentInputConnection ?: return
             val before = ic.getTextBeforeCursor(50, 0)?.toString() ?: ""
             val partialWord = before.takeLastWhile { it.isLetter() || it == '\'' }
