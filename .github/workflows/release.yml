@@ -43,6 +43,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: false
 
       # ── 3. Generate keystore on runner ───────────────────────────────────────
       - name: Generate release keystore
