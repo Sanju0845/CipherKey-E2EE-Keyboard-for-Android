@@ -39,7 +39,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          disable-wrapper-validation: true
+          wrapper-validation-enabled: false
 
       # ── 5. Prepare Local Properties ────────────────────────────────────────
       - name: Create local.properties
