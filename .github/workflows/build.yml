@@ -38,6 +38,8 @@ jobs:
       # ── 4. Cache Gradle ────────────────────────────────────────────────────
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: false
 
       # ── 5. Prepare Local Properties ────────────────────────────────────────
       - name: Create local.properties
