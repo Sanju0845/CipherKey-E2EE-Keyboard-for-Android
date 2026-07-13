@@ -44,20 +44,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # ── 3. Generate keystore on runner ───────────────────────────────────────
-      - name: Generate release keystore
+      # ── 3. Decode release keystore from secrets ───────────────────────────────
+      - name: Decode release keystore
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         run: |
-          keytool -genkey -v \
-            -keystore eb-key.jks \
-            -alias encryptboard \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storetype JKS \
-            -storepass encryptboard2026 \
-            -keypass encryptboard2026 \
-            -dname "CN=Singularity Software, OU=EncryptBoard, O=Singularity Software, L=India, ST=India, C=IN"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > eb-key.jks
 
       # ── 4. Version info ───────────────────────────────────────────────────────
       - name: Extract version info
@@ -77,9 +68,9 @@ jobs:
         run: ./gradlew assembleDebug assembleRelease bundleRelease --no-daemon
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/eb-key.jks
-          STORE_PASSWORD: encryptboard2026
-          KEY_ALIAS: encryptboard
-          KEY_PASSWORD: encryptboard2026
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       # ── 6. Rename outputs ─────────────────────────────────────────────────────
       - name: Rename APKs and AAB
