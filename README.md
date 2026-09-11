@@ -1,6 +1,18 @@
 # CipherKey — Encrypted Keyboard for Android
 
-CipherKey is a custom Android keyboard that encrypts what you type **before** it goes into WhatsApp, Telegram, Instagram, SMS, or any other app. Friends who use CipherKey with the **same passphrase** can read your real message; everyone else only sees encoded text.
+[![GitHub forks](https://img.shields.io/github/forks/Sanju0845/CipherKey-E2EE-Keyboard-for-Android?style=flat-square)](https://github.com/Sanju0845/CipherKey-E2EE-Keyboard-for-Android/network/members)
+[![GitHub stars](https://img.shields.io/github/stars/Sanju0845/CipherKey-E2EE-Keyboard-for-Android?style=flat-square)](https://github.com/Sanju0845/CipherKey-E2EE-Keyboard-for-Android/stargazers)
+[![GitHub watchers](https://img.shields.io/github/watchers/Sanju0845/CipherKey-E2EE-Keyboard-for-Android?style=flat-square)](https://github.com/Sanju0845/CipherKey-E2EE-Keyboard-for-Android/watchers)
+
+**CipherKey is a system-wide encrypted keyboard for Android that encrypts messages before they leave your phone, enabling end-to-end encrypted communication across any messaging app.**
+
+***⚠️ COPYRIGHT NOTICE: This is an original personal project by Sanju0845 (AKA Sanjay Anand Soma).***
+***You must provide credit to the original author in ALL cases - personal, educational, or commercial use.***
+***The author is NOT responsible for any damages, data loss, security breaches, or misuse of this code.***
+***You CANNOT sue the author directly or indirectly for any issues arising from using this project.***
+***By using this code, you accept full responsibility for your implementation and any consequences.***
+
+---
 
 ## Why this exists
 
@@ -31,7 +43,7 @@ Most secret-chat apps only work inside one messenger. CipherKey works **across a
 
 ## Build from source
 
-**Cloud build (no local Gradle):** Every push to `main` runs [GitHub Actions](https://github.com/Sanju0845/CipherKey-E2EE-Keyboard-for-Android/actions). Open the latest workflow run → **Artifacts** → download `cipherkey-debug-apk` or `cipherkey-release-apk`.
+**Cloud build (no local Gradle):** Every push to `main` runs [GitHub Actions](https://github.com/Sanju0845/CipherKey-E2EE-Keyboard-for-Android/actions). Open the latest workflow run → **Artifacts** → download the APK.
 
 **Local build:**
 
@@ -70,7 +82,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## Security note
 
-This uses a **shared password**, not per-contact Signal-style keys. Anyone with the passphrase and CipherKey can decrypt. The visual wrapper hides meaning from casual readers; use a strong custom passphrase for better privacy.
+This uses a **shared password**, not per-contact Signal-style keys. Anyone with the passphrase and CipherKey can decrypt. The visual wrapper hides meaning from casual readers; use a strong custom passphrase and rotate it periodically.
 
 ## Roadmap
 
@@ -84,4 +96,22 @@ Browser companion (optional): see [`E2EE-EXTENSION/`](E2EE-EXTENSION/) for Chrom
 
 ## License
 
-MIT (or specify your license here).
+**Dual License:**
+- **MIT License** - Use, modify, and distribute freely (see LICENSE-MIT)
+- **CC-BY 4.0 (Creative Commons Attribution)** - Any use (including commercial) requires attribution to Sanjay Anand Soma (Sanju0845)
+
+**Full Text:**
+```
+This project is provided "AS-IS" without any warranty or liability.
+The author (Sanju0845/Sanjay Anand Soma) is NOT responsible for:
+- Any damages, data loss, or security breaches
+- Misuse of this code for malicious purposes
+- Any consequences arising from using this project
+
+You may NOT sue the author directly or indirectly for any issues.
+By downloading/using this code, you accept full responsibility.
+```
+
+---
+
+**Made with ❤️ by Sanju0845**
