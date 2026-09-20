@@ -2691,7 +2691,7 @@ fun SettingsTab(
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "Active &amp; Guarded · v1.2",
+                        text = "Active & Guarded · v${BuildConfig.VERSION_NAME}",
                         fontSize = 10.sp,
                         color = Slate500
                     )

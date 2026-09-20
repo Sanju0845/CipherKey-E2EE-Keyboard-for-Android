@@ -16,3 +16,6 @@ debug.keystore
 E2EE-EXTENSION.zip
 secret_token.txt
 push.js
+-e 
+.build-outputs/
+debug.keystore.base64
